@@ -1,0 +1,28 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NUXT_MONGODB_URI: ${MONGODB_URI}
+      NUXT_JWT_SECRET: ${JWT_SECRET}
+      NUXT_JWT_EXPIRE: ${JWT_EXPIRE:-30d}
+      NUXT_ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      NUXT_ADMIN_EMAIL: ${ADMIN_EMAIL}
+      NUXT_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      NUXT_ADMIN_NAME: ${ADMIN_NAME:-Admin}
+      NUXT_PUBLIC_APP_URL: ${APP_URL}
+      NUXT_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      NUXT_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      NUXT_GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      NUXT_BACKUP_TMP_DIR: /tmp/mongo-backup
+      NUXT_MONGODUMP_BIN: mongodump
+      NUXT_SCHEDULER_ENABLED: "true"
+      NODE_ENV: production
+    ports:
+      - "13280:13280"
+    volumes:
+      - backup_tmp:/tmp/mongo-backup
+      - /etc/machine-id:/etc/machine-id:ro
+
+volumes:
+  backup_tmp:

@@ -1,0 +1,12 @@
+node_modules
+.nuxt
+.output
+.env
+.env.local
+*.log
+logs/
+.DS_Store
+dist
+coverage
+.tmp/
+/tmp-backups/

@@ -1,0 +1,47 @@
+{
+  "name": "mongo-backup-gdrive",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --port 13280",
+    "build": "nuxt build",
+    "start": "node --env-file=.env .output/server/index.mjs",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@pinia/nuxt": "^0.11.3",
+    "@tailwindcss/postcss": "^4.2.0",
+    "@truxie/nitro": "0.1.0-test.6",
+    "bcryptjs": "^3.0.3",
+    "dayjs": "^1.11.13",
+    "google-auth-library": "^9.14.2",
+    "googleapis": "^144.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.2.2",
+    "node-cron": "^3.0.3",
+    "nuxt": "^4.0.0",
+    "pinia": "^2.3.0",
+    "reflect-metadata": "^0.2.2",
+    "tailwindcss": "^4.2.0",
+    "truxie": "0.1.0-test.17",
+    "vue": "^3.5.0",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.10.0",
+    "@types/node-cron": "^3.0.11",
+    "typescript": "^5.7.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "esbuild",
+      "vue-demi"
+    ]
+  }
+}
