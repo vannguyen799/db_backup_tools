@@ -73,6 +73,12 @@
                   <span v-else>—</span>
                 </div>
               </div>
+              <div v-if="j.gdriveFileId" class="flex items-center gap-2">
+                <button class="btn" :disabled="!!downloading[j._id]" @click="download(j)">
+                  {{ downloading[j._id] ? '↓ Preparing…' : '↓ Download archive' }}
+                </button>
+                <span v-if="downloadErrors[j._id]" class="text-xs text-[var(--color-danger)]">{{ downloadErrors[j._id] }}</span>
+              </div>
               <div>
                 <div class="flex items-center justify-between mb-1.5">
                   <div class="label !mb-0">Log</div>
@@ -131,6 +137,7 @@ interface Job {
   triggeredBy: string
   startedAt?: string
   finishedAt?: string
+  gdriveFileId?: string
   gdriveWebViewLink?: string
   log?: string
   error?: string
@@ -149,9 +156,25 @@ const refreshing = ref(false)
 const busy = ref(false)
 const error = ref('')
 const expanded = reactive<Record<string, boolean>>({})
+const downloading = reactive<Record<string, boolean>>({})
+const downloadErrors = reactive<Record<string, string>>({})
 
 function toggle(id: string) {
   expanded[id] = !expanded[id]
+}
+
+async function download(j: Job) {
+  if (downloading[j._id]) return
+  downloading[j._id] = true
+  downloadErrors[j._id] = ''
+  try {
+    const res = await api.post<{ url: string; filename: string }>(`/api/jobs/${j._id}/download-url`)
+    window.location.href = res.url
+  } catch (err) {
+    downloadErrors[j._id] = (err as Error).message || 'Failed to start download'
+  } finally {
+    setTimeout(() => { downloading[j._id] = false }, 800)
+  }
 }
 
 async function refresh() {
