@@ -17,6 +17,7 @@ services:
       NUXT_BACKUP_TMP_DIR: /tmp/mongo-backup
       NUXT_MONGODUMP_BIN: mongodump
       NUXT_SCHEDULER_ENABLED: "true"
+      MACHINE_ID: ${MACHINE_ID:-}
       NODE_ENV: production
     ports:
       - "13280:13280"
