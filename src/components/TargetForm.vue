@@ -52,33 +52,56 @@
       </div>
     </div>
 
-    <div v-if="boundMachineId" class="panel-2 p-4">
+    <div v-if="!isCreate" class="panel-2 p-4">
       <div class="flex items-center justify-between mb-3">
         <h3 class="text-sm font-semibold">Machine binding</h3>
         <span
-          v-if="machineMatches"
+          v-if="!form.machineId"
+          class="badge"
+        >Not pinned</span>
+        <span
+          v-else-if="machineIdMatchesCurrent"
           class="badge badge-success"
         >Bound to this server</span>
         <span v-else class="badge badge-warning">⚠ Bound to another server</span>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+      <div class="space-y-3">
         <div>
-          <div class="label">Target's machine ID</div>
-          <code class="block panel p-2 font-mono break-all">{{ boundMachineId }}</code>
+          <label class="label">Target's machine ID</label>
+          <div class="flex gap-2">
+            <input
+              v-model="form.machineId"
+              class="input font-mono text-xs"
+              placeholder="(empty = not pinned)"
+            />
+            <button
+              type="button"
+              class="btn whitespace-nowrap"
+              :disabled="busy || !currentMachineId"
+              :title="currentMachineId ? 'Set to this server\'s machine ID' : 'Current machine ID unknown'"
+              @click="form.machineId = currentMachineId"
+            >
+              Use this server
+            </button>
+            <button
+              type="button"
+              class="btn whitespace-nowrap"
+              :disabled="busy || !form.machineId"
+              @click="form.machineId = ''"
+            >
+              Clear
+            </button>
+          </div>
         </div>
         <div>
           <div class="label">Current server</div>
-          <code class="block panel p-2 font-mono break-all">{{ currentMachineId || '—' }}</code>
+          <code class="block panel p-2 font-mono break-all text-xs">{{ currentMachineId || '—' }}</code>
         </div>
       </div>
       <div class="text-xs text-[var(--color-text-muted)] mt-2">
-        This target uses a local MongoDB URI (<code>localhost</code> / <code>127.0.0.1</code>), so it is pinned to the
-        server where it was created. Backups will refuse to run on any other machine to avoid backing up the wrong DB.
-      </div>
-      <div class="flex items-center justify-end mt-3">
-        <button type="button" class="btn" :disabled="busy" @click="$emit('rebind')">
-          Rebind to this server
-        </button>
+        When set, backups will refuse to run on any machine whose ID doesn't match — useful for targets pointing to
+        <code>localhost</code> / <code>127.0.0.1</code>. Leave empty to allow this target to run from any server.
+        Override the host's identity with the <code>MACHINE_ID</code> env var.
       </div>
     </div>
 
@@ -290,6 +313,7 @@ interface TargetForm {
   gdriveFolderName: string
   retention: { mode: 'count' | 'days' | 'none'; keepCount: number; keepDays: number }
   enabled: boolean
+  machineId: string
 }
 
 interface AccountSummary {
@@ -303,9 +327,7 @@ interface AccountSummary {
 
 const props = defineProps<{
   initial?: Partial<TargetForm> & {
-    machineId?: string
     currentMachineId?: string
-    machineMatches?: boolean
   }
   busy?: boolean
   isCreate?: boolean
@@ -313,12 +335,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'submit', value: TargetForm): void
   (e: 'delete'): void
-  (e: 'rebind'): void
 }>()
 
-const boundMachineId = computed(() => props.initial?.machineId || '')
 const currentMachineId = computed(() => props.initial?.currentMachineId || '')
-const machineMatches = computed(() => props.initial?.machineMatches !== false)
 
 const api = useApi()
 const folders = ref<{ id: string; name: string }[]>([])
@@ -340,6 +359,7 @@ const defaults: TargetForm = {
   gdriveFolderName: '',
   retention: { mode: 'count', keepCount: 7, keepDays: 30 },
   enabled: true,
+  machineId: '',
 }
 const incoming = (props.initial || {}) as Partial<TargetForm>
 const form = reactive<TargetForm>({
@@ -352,6 +372,10 @@ const form = reactive<TargetForm>({
     patterns: incoming.collectionFilter?.patterns ? [...incoming.collectionFilter.patterns] : [],
   },
 })
+
+const machineIdMatchesCurrent = computed(
+  () => !!form.machineId && form.machineId === currentMachineId.value,
+)
 
 const selectedDb = ref<string>(form.includeDbs[0] || '')
 

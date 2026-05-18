@@ -46,6 +46,7 @@ export interface CreateTargetInput {
 export type UpdateTargetInput = Partial<Omit<CreateTargetInput, 'mongoUri'>> & {
   mongoUri?: string
   regenerateMachineId?: boolean
+  machineId?: string
 }
 
 @Injectable()
@@ -133,6 +134,9 @@ export class BackupTargetsService {
     if (typeof input.gdriveFolderName === 'string') patch.gdriveFolderName = input.gdriveFolderName
     if (input.retention) patch.retention = input.retention
     if (typeof input.enabled === 'boolean') patch.enabled = input.enabled
+
+    // Explicit machineId wins over the auto-set from mongoUri/regenerateMachineId above.
+    if (typeof input.machineId === 'string') patch.machineId = input.machineId.trim()
 
     const target = await this.repo.update(id, patch as never)
     if (!target) throw new NotFoundError('Target not found')

@@ -6,6 +6,11 @@ let cached: string | null = null
 
 export function getMachineId(): string {
   if (cached) return cached
+  const fromEnv = (process.env.MACHINE_ID || '').trim()
+  if (fromEnv) {
+    cached = fromEnv
+    return fromEnv
+  }
   const candidates = ['/etc/machine-id', '/var/lib/dbus/machine-id']
   for (const p of candidates) {
     try {

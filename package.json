@@ -22,7 +22,7 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.2.2",
     "node-cron": "^3.0.3",
-    "nuxt": "^4.0.0",
+    "nuxt": "4.3.1",
     "pinia": "^2.3.0",
     "reflect-metadata": "^0.2.2",
     "tailwindcss": "^4.2.0",

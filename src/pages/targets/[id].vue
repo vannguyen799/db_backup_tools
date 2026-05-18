@@ -32,7 +32,6 @@
           :busy="busy"
           @submit="onSubmit"
           @delete="onDelete"
-          @rebind="onRebind"
         />
         <div v-if="error" class="text-sm text-[var(--color-danger)] mt-3">{{ error }}</div>
       </div>
@@ -188,20 +187,6 @@ async function onDelete() {
   if (!confirm(`Delete target "${target.value?.name}"? Existing backup files in Drive are not removed.`)) return
   await api.del(`/api/targets/${route.params.id}`)
   await navigateTo('/targets')
-}
-
-async function onRebind() {
-  if (!confirm('Rebind this target to the current server? Future backups will only run from this machine.')) return
-  busy.value = true
-  error.value = ''
-  try {
-    await api.patch(`/api/targets/${route.params.id}`, { regenerateMachineId: true })
-    await refresh()
-  } catch (err) {
-    error.value = (err as Error).message
-  } finally {
-    busy.value = false
-  }
 }
 
 async function runNow() {
