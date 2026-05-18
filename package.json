@@ -9,7 +9,13 @@
     "start": "node --env-file=.env .output/server/index.mjs",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "nuxt typecheck",
+    "tunnel": "cloudflared tunnel --url http://localhost:13280",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f app",
+    "docker:restart": "docker compose restart app"
   },
   "dependencies": {
     "@pinia/nuxt": "^0.11.3",
