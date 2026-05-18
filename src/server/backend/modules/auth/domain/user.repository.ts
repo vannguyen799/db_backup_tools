@@ -24,6 +24,10 @@ export class UserRepository {
     await User.updateOne({ _id: id }, { lastLoginAt: new Date() })
   }
 
+  async updatePassword(id: string, hashedPassword: string): Promise<void> {
+    await User.updateOne({ _id: id }, { password: hashedPassword })
+  }
+
   async existsByEmail(email: string): Promise<boolean> {
     return !!(await User.exists({ email: email.toLowerCase() }))
   }

@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs'
-import { Injectable, Inject, UnauthorizedError } from 'truxie'
+import { Injectable, Inject, UnauthorizedError, ValidationError } from 'truxie'
 import { AUTH_MODULE_OPTIONS, type AuthModuleConfig } from '../auth.config'
 import { UserRepository } from '../domain/user.repository'
 import { signToken, type AuthPayload } from '~/server/utils/jwt'
@@ -45,6 +45,26 @@ export class AuthService {
       token: signToken(payload),
       user: { id: String(user._id), email: user.email, name: user.name, role: user.role as string },
     }
+  }
+
+  async changePassword(userId: string, input: { currentPassword: string; newPassword: string }): Promise<void> {
+    const currentPassword = input.currentPassword || ''
+    const newPassword = input.newPassword || ''
+    if (!currentPassword || !newPassword) {
+      throw new ValidationError('Current and new passwords are required')
+    }
+    if (newPassword.length < 8) {
+      throw new ValidationError('New password must be at least 8 characters')
+    }
+    if (newPassword === currentPassword) {
+      throw new ValidationError('New password must be different from current password')
+    }
+    const user = await this.userRepo.findById(userId)
+    if (!user) throw new UnauthorizedError('User not found')
+    const ok = await this.verifyPassword(currentPassword, user.password)
+    if (!ok) throw new UnauthorizedError('Current password is incorrect')
+    const hashed = await this.hashPassword(newPassword)
+    await this.userRepo.updatePassword(userId, hashed)
   }
 
   async getMe(userId: string) {

@@ -21,4 +21,13 @@ export class AuthController {
     const user = await this.authService.getMe(auth.id)
     return sendSuccess(user)
   }
+
+  @Post('/change-password')
+  async changePassword(
+    @Auth() auth: AuthPayload,
+    @Body() body: { currentPassword: string; newPassword: string },
+  ) {
+    await this.authService.changePassword(auth.id, body)
+    return sendSuccess(null, 'Password updated')
+  }
 }

@@ -1,9 +1,35 @@
 <template>
   <div>
     <h1 class="text-xl font-semibold mb-1">Settings</h1>
-    <p class="text-sm text-[var(--color-text-muted)] mb-6">Manage Google Drive accounts</p>
+    <p class="text-sm text-[var(--color-text-muted)] mb-6">Manage your account and Google Drive integrations</p>
 
     <div v-if="banner" class="mb-4 panel p-3 text-sm" :class="bannerClass">{{ banner }}</div>
+
+    <div class="panel p-6 max-w-3xl mb-4">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold">Change password</h2>
+        <span v-if="auth.user?.email" class="text-xs text-[var(--color-text-muted)]">{{ auth.user.email }}</span>
+      </div>
+      <div v-if="pwBanner" class="mb-3 panel-2 p-3 text-sm" :class="pwBannerClass">{{ pwBanner }}</div>
+      <form class="space-y-3" @submit.prevent="changePassword">
+        <div>
+          <label class="label">Current password</label>
+          <input v-model="pw.currentPassword" type="password" class="input" autocomplete="current-password" required />
+        </div>
+        <div>
+          <label class="label">New password</label>
+          <input v-model="pw.newPassword" type="password" class="input" autocomplete="new-password" minlength="8" required />
+          <div class="text-xs text-[var(--color-text-muted)] mt-1">At least 8 characters.</div>
+        </div>
+        <div>
+          <label class="label">Confirm new password</label>
+          <input v-model="pw.confirmPassword" type="password" class="input" autocomplete="new-password" required />
+        </div>
+        <button class="btn btn-primary" :disabled="pwBusy">
+          {{ pwBusy ? 'Updating…' : 'Update password' }}
+        </button>
+      </form>
+    </div>
 
     <div class="panel p-6 max-w-3xl">
       <div class="flex items-center justify-between mb-4">
@@ -116,6 +142,7 @@
 
 <script setup lang="ts">
 import { useApi } from '~/composables/useApi'
+import { useAuthStore } from '~/stores/auth'
 import { formatDate } from '~/utils/format'
 
 interface Account {
@@ -135,6 +162,7 @@ interface StatusResponse {
 }
 
 const api = useApi()
+const auth = useAuthStore()
 const accounts = ref<Account[]>([])
 const envInfo = reactive({ hasEnvCreds: false, redirectUri: '' })
 const loading = ref(true)
@@ -151,6 +179,37 @@ const manual = reactive({
   clientSecret: '',
   refreshToken: '',
 })
+
+const pw = reactive({ currentPassword: '', newPassword: '', confirmPassword: '' })
+const pwBusy = ref(false)
+const pwBanner = ref('')
+const pwBannerClass = ref('')
+
+async function changePassword() {
+  pwBanner.value = ''
+  if (pw.newPassword !== pw.confirmPassword) {
+    pwBanner.value = 'New password and confirmation do not match'
+    pwBannerClass.value = 'border-[var(--color-danger)] text-[var(--color-danger)]'
+    return
+  }
+  pwBusy.value = true
+  try {
+    await api.post('/api/auth/change-password', {
+      currentPassword: pw.currentPassword,
+      newPassword: pw.newPassword,
+    })
+    pw.currentPassword = ''
+    pw.newPassword = ''
+    pw.confirmPassword = ''
+    pwBanner.value = '✓ Password updated'
+    pwBannerClass.value = 'border-[var(--color-success)] text-[var(--color-success)]'
+  } catch (err) {
+    pwBanner.value = `✗ ${(err as Error).message}`
+    pwBannerClass.value = 'border-[var(--color-danger)] text-[var(--color-danger)]'
+  } finally {
+    pwBusy.value = false
+  }
+}
 
 const route = useRoute()
 
