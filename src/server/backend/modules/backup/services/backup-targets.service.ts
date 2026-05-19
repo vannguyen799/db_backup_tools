@@ -2,7 +2,7 @@ import cronLib from 'node-cron'
 import { Injectable, Inject, AppError, NotFoundError } from 'truxie'
 import { BackupTargetRepository } from '../domain/backup-target.repository'
 import { BackupSchedulerService } from './backup-scheduler.service'
-import { encryptString } from '~/server/utils/crypto'
+import { encryptString, decryptString } from '~/server/utils/crypto'
 import { getMachineId, isLocalMongoUri } from '~/server/utils/machine-id'
 
 function normalizeCollectionFilter(input?: CollectionFilterInput) {
@@ -71,6 +71,12 @@ export class BackupTargetsService {
       currentMachineId,
       machineMatches: targetMachineId ? targetMachineId === currentMachineId : true,
     }
+  }
+
+  async getMongoUri(id: string) {
+    const t = await this.repo.findById(id)
+    if (!t) throw new NotFoundError('Target not found')
+    return { mongoUri: decryptString(t.mongoUriEncrypted) }
   }
 
   async create(input: CreateTargetInput) {

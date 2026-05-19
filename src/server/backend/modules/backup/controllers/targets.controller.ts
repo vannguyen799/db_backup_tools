@@ -32,6 +32,11 @@ export class TargetsController {
     return sendSuccess(await this.targets.findById(id))
   }
 
+  @Get('/:id/uri')
+  async getUri(@Param('id') id: string) {
+    return sendSuccess(await this.targets.getMongoUri(id))
+  }
+
   @Post('/')
   async create(@Body() body: CreateTargetInput) {
     return sendSuccess(await this.targets.create(body), 'Target created')

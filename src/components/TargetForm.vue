@@ -31,22 +31,34 @@
 
     <div>
       <label class="label">MongoDB URI {{ isCreate ? '*' : '(leave blank to keep)' }}</label>
-      <div class="relative">
-        <input
-          v-model="form.mongoUri"
-          class="input font-mono pr-44"
-          :required="isCreate"
-          :placeholder="isCreate ? 'mongodb+srv://user:pass@host/db' : '••• unchanged'"
-        />
-        <span
-          v-if="probeLoading"
-          class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--color-text-muted)]"
-        >Loading databases…</span>
-        <span
-          v-else-if="probed.length"
-          class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--color-accent)]"
-        >{{ probed.length }} database(s) loaded</span>
+      <div class="flex gap-2">
+        <div class="relative flex-1">
+          <input
+            v-model="form.mongoUri"
+            class="input font-mono pr-44 w-full"
+            :required="isCreate"
+            :placeholder="isCreate ? 'mongodb+srv://user:pass@host/db' : '••• unchanged'"
+          />
+          <span
+            v-if="probeLoading"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--color-text-muted)]"
+          >Loading databases…</span>
+          <span
+            v-else-if="probed.length"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--color-accent)]"
+          >{{ probed.length }} database(s) loaded</span>
+        </div>
+        <button
+          v-if="!isCreate"
+          type="button"
+          class="btn whitespace-nowrap"
+          :disabled="revealLoading"
+          @click="toggleRevealUri"
+        >
+          {{ revealLoading ? 'Loading…' : (uriRevealed ? 'Hide' : 'Show') }}
+        </button>
       </div>
+      <div v-if="revealError" class="text-xs text-[var(--color-danger)] mt-1">{{ revealError }}</div>
       <div class="text-xs text-[var(--color-text-muted)] mt-1">
         Encrypted at rest. If the URI ends with <code>/&lt;db&gt;</code>, that database is auto-selected.
       </div>
@@ -426,6 +438,30 @@ const cronHumanLabel = computed(() => {
 const probed = ref<ProbedDb[]>([])
 const probeLoading = ref(false)
 const probeError = ref('')
+
+const uriRevealed = ref(false)
+const revealLoading = ref(false)
+const revealError = ref('')
+
+async function toggleRevealUri() {
+  revealError.value = ''
+  if (uriRevealed.value) {
+    form.mongoUri = ''
+    uriRevealed.value = false
+    return
+  }
+  if (!form._id) return
+  revealLoading.value = true
+  try {
+    const res = await api.get<{ mongoUri: string }>(`/api/targets/${form._id}/uri`)
+    form.mongoUri = res.mongoUri
+    uriRevealed.value = true
+  } catch (err) {
+    revealError.value = (err as Error).message
+  } finally {
+    revealLoading.value = false
+  }
+}
 
 const selectedDbInfo = computed(() => probed.value.find((d) => d.name === selectedDb.value) || null)
 
