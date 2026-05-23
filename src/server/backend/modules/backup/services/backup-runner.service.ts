@@ -14,6 +14,30 @@ import { logger } from '~/server/utils/logger'
 
 const log = logger.getContext('BackupRunner')
 
+const RETRY_ATTEMPTS = 3
+const RETRY_BASE_DELAY_MS = 2000
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function withRetry<T>(label: string, fn: () => Promise<T>, onAttempt?: (msg: string) => void): Promise<T> {
+  let lastErr: unknown
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (attempt < RETRY_ATTEMPTS) {
+        const delay = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1)
+        onAttempt?.(`${label} attempt ${attempt}/${RETRY_ATTEMPTS} failed: ${(err as Error).message}. Retrying in ${delay}ms...`)
+        await sleep(delay)
+      }
+    }
+  }
+  throw lastErr
+}
+
 function ts() {
   return new Date().toISOString().replace(/[:.]/g, '-')
 }
@@ -295,12 +319,12 @@ export class BackupRunnerService {
         outputFilename = `${baseName}.archive.gz`
         outputPath = path.join(tmpRoot, outputFilename)
         append('Running mongodump (single archive)...')
-        const r = await this.dumpSingleArchive({
+        const r = await withRetry('mongodump', () => this.dumpSingleArchive({
           mongoUri,
           archivePath: outputPath,
           includeDbs: plan.includeDbs,
           excludeDbs: plan.excludeDbs,
-        })
+        }), append)
         if (r.stderr) append(`mongodump stderr:\n${r.stderr.trim()}`)
       } else {
         workDir = path.join(tmpRoot, baseName)
@@ -312,25 +336,25 @@ export class BackupRunnerService {
           const filename = `${safeName(p.db)}.archive.gz`
           const archivePath = path.join(workDir, filename)
           append(`mongodump db=${p.db}${p.excludeCollections.length ? ` excludes=${p.excludeCollections.join(',')}` : ''}${p.excludePrefixes.length ? ` excludePrefixes=${p.excludePrefixes.join(',')}` : ''}`)
-          const r = await this.dumpDbWithExcludes({
+          const r = await withRetry(`mongodump db=${p.db}`, () => this.dumpDbWithExcludes({
             mongoUri,
             archivePath,
             db: p.db,
             excludeCollections: p.excludeCollections,
             excludePrefixes: p.excludePrefixes,
-          })
+          }), append)
           if (r.stderr) append(`  stderr: ${r.stderr.trim()}`)
         }
         for (const p of plan.includeDumps) {
           const filename = `${safeName(p.db)}__${safeName(p.collection)}.archive.gz`
           const archivePath = path.join(workDir, filename)
           append(`mongodump db=${p.db} collection=${p.collection}`)
-          const r = await this.dumpCollection({
+          const r = await withRetry(`mongodump db=${p.db} collection=${p.collection}`, () => this.dumpCollection({
             mongoUri,
             archivePath,
             db: p.db,
             collection: p.collection,
-          })
+          }), append)
           if (r.stderr) append(`  stderr: ${r.stderr.trim()}`)
         }
         outputFilename = `${baseName}.tar`
@@ -344,13 +368,13 @@ export class BackupRunnerService {
       append(`Archive created: ${outputFilename} (${formatBytes(stat.size)})`)
 
       append('Uploading to Google Drive...')
-      const upload = await this.gdrive.uploadFile({
+      const upload = await withRetry('gdrive upload', () => this.gdrive.uploadFile({
         accountId,
         filePath: outputPath,
         filename: outputFilename,
         folderId: target.gdriveFolderId || undefined,
         mimeType: outputFilename.endsWith('.tar') ? 'application/x-tar' : 'application/gzip',
-      })
+      }), append)
       append(`Uploaded to Drive: ${upload.id}`)
 
       const removed = await this.applyRetention(target, accountId)
