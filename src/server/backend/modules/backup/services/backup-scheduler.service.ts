@@ -7,7 +7,7 @@ import {
 } from 'truxie'
 import { BackupTargetRepository } from '../domain/backup-target.repository'
 import { BackupRunnerService } from './backup-runner.service'
-import { isDBConnected } from '~/server/utils/database/connect'
+import { isDBConnected, onDBConnected } from '~/server/utils/database/connect'
 import { logger } from '~/server/utils/logger'
 
 const log = logger.getContext('BackupScheduler')
@@ -16,24 +16,26 @@ const log = logger.getContext('BackupScheduler')
 @Inject(BackupTargetRepository, BackupRunnerService)
 export class BackupSchedulerService implements OnApplicationBootstrap, OnApplicationShutdown {
   private tasks = new Map<string, { cron: string; task: ScheduledTask }>()
+  private unsubscribe?: () => void
 
   constructor(
     private readonly targets: BackupTargetRepository,
     private readonly runner: BackupRunnerService,
   ) {}
 
-  async onApplicationBootstrap(): Promise<void> {
-    for (let i = 0; i < 10 && !isDBConnected(); i++) {
-      await new Promise((r) => setTimeout(r, 500))
-    }
-    if (!isDBConnected()) {
-      log.warn('DB not connected — schedule reload deferred')
-      return
-    }
-    await this.reload()
+  onApplicationBootstrap(): void {
+    // Load schedules as soon as the DB is connected — and reload on every
+    // reconnect. The MongoDB connection can take longer than the old fixed
+    // 5s wait window (Atlas SRV resolution), which previously left cron jobs
+    // permanently unregistered after a restart.
+    this.unsubscribe = onDBConnected(() => {
+      this.reload().catch((err) => log.error('Schedule reload failed:', (err as Error).message))
+    })
+    if (!isDBConnected()) log.info('Waiting for DB connection to load schedules…')
   }
 
   onApplicationShutdown(): void {
+    this.unsubscribe?.()
     this.stopAll()
   }
 

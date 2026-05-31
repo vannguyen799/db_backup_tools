@@ -39,3 +39,13 @@ export async function connectDB(uri: string): Promise<typeof mongoose> {
 export function isDBConnected(): boolean {
   return mongoose.connection.readyState === 1
 }
+
+/**
+ * Run `cb` as soon as the DB is connected — immediately if already connected,
+ * otherwise on every (re)connect. Returns an unsubscribe function.
+ */
+export function onDBConnected(cb: () => void): () => void {
+  if (isDBConnected()) cb()
+  mongoose.connection.on('connected', cb)
+  return () => mongoose.connection.off('connected', cb)
+}
