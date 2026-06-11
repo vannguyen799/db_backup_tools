@@ -35,6 +35,7 @@ const moduleImports: Array<Type | DynamicModule> = [
   BackupModule.forRoot({
     tmpDir: cfg.backupTmpDir as string,
     mongodumpBin: cfg.mongodumpBin as string,
+    pgDumpBin: cfg.pgDumpBin as string,
   }),
   HealthModule,
 ]

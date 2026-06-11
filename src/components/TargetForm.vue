@@ -24,20 +24,37 @@
       </div>
     </div>
 
-    <div>
-      <label class="label">Description</label>
-      <input v-model="form.description" class="input" placeholder="Optional" />
+    <div class="grid grid-cols-2 gap-5">
+      <div>
+        <label class="label">Database type *</label>
+        <select
+          v-model="form.databaseType"
+          class="select"
+          :disabled="!isCreate"
+          @change="onDatabaseTypeChange"
+        >
+          <option value="mongodb">MongoDB</option>
+          <option value="postgresql">PostgreSQL</option>
+        </select>
+        <div v-if="!isCreate" class="text-xs text-[var(--color-text-muted)] mt-1">
+          Type can't be changed after creation.
+        </div>
+      </div>
+      <div>
+        <label class="label">Description</label>
+        <input v-model="form.description" class="input" placeholder="Optional" />
+      </div>
     </div>
 
     <div>
-      <label class="label">MongoDB URI {{ isCreate ? '*' : '(leave blank to keep)' }}</label>
+      <label class="label">{{ uriLabel }} {{ isCreate ? '*' : '(leave blank to keep)' }}</label>
       <div class="flex gap-2">
         <div class="relative flex-1">
           <input
             v-model="form.mongoUri"
             class="input font-mono pr-44 w-full"
             :required="isCreate"
-            :placeholder="isCreate ? 'mongodb+srv://user:pass@host/db' : '••• unchanged'"
+            :placeholder="isCreate ? uriPlaceholder : '••• unchanged'"
           />
           <span
             v-if="probeLoading"
@@ -145,12 +162,12 @@
         Detected from URI path.
       </div>
       <div v-else-if="!probed.length && isCreate" class="text-xs text-[var(--color-text-muted)] mt-1">
-        Paste a MongoDB URI above to load databases.
+        Paste a {{ uriLabel }} above to load databases.
       </div>
     </div>
 
     <div v-if="selectedDb" class="panel-2 p-4">
-      <h3 class="text-sm font-semibold mb-3">Collections in <span class="font-mono">{{ selectedDb }}</span></h3>
+      <h3 class="text-sm font-semibold mb-3 capitalize">{{ objectNoun }} in <span class="font-mono">{{ selectedDb }}</span></h3>
 
       <div class="grid grid-cols-2 gap-2 mb-3">
         <label
@@ -170,10 +187,10 @@
       </div>
 
       <div v-if="!selectedDbInfo" class="text-xs text-[var(--color-text-muted)] mb-3">
-        Collections not yet loaded — click "Fetch from source ↻" to list them.
+        {{ objectNoun }} not yet loaded — click "Fetch from source ↻" to list them.
       </div>
       <div v-else-if="!selectedDbInfo.collections.length" class="text-xs text-[var(--color-text-muted)] mb-3">
-        No collections found in this database.
+        No {{ objectNoun }} found in this database.
       </div>
       <div v-else class="space-y-1 mb-3 max-h-72 overflow-auto panel-2 p-3">
         <div class="flex gap-2 text-xs mb-2">
@@ -205,10 +222,16 @@
           placeholder="logs&#10;tmp_*&#10;staging_*"
         />
         <div class="text-xs text-[var(--color-text-muted)] mt-1">
-          Collection name or prefix with trailing <code>*</code>. Scoped to <span class="font-mono">{{ selectedDb }}</span>.
-          {{ form.collectionFilter.mode === 'include'
-             ? 'In include mode, source is queried at backup time to expand prefix patterns.'
-             : '' }}
+          <template v-if="isPostgres">
+            Table name or pattern (<code>schema.table</code>, or <code>prefix*</code> wildcards). Passed to
+            <code>pg_dump --{{ form.collectionFilter.mode === 'include' ? 'table' : 'exclude-table' }}</code>.
+          </template>
+          <template v-else>
+            Collection name or prefix with trailing <code>*</code>. Scoped to <span class="font-mono">{{ selectedDb }}</span>.
+            {{ form.collectionFilter.mode === 'include'
+               ? 'In include mode, source is queried at backup time to expand prefix patterns.'
+               : '' }}
+          </template>
         </div>
       </div>
 
@@ -311,10 +334,13 @@ interface CollectionFilter {
 }
 interface ProbedDb { name: string; collections: string[]; isSystem: boolean }
 
+type DatabaseType = 'mongodb' | 'postgresql'
+
 interface TargetForm {
   _id?: string
   name: string
   description: string
+  databaseType: DatabaseType
   mongoUri: string
   includeDbs: string[]
   excludeDbs: string[]
@@ -361,6 +387,7 @@ const submitError = ref('')
 const defaults: TargetForm = {
   name: '',
   description: '',
+  databaseType: 'mongodb',
   mongoUri: '',
   includeDbs: [],
   excludeDbs: [],
@@ -389,12 +416,27 @@ const machineIdMatchesCurrent = computed(
   () => !!form.machineId && form.machineId === currentMachineId.value,
 )
 
+const isPostgres = computed(() => form.databaseType === 'postgresql')
+const uriLabel = computed(() => (isPostgres.value ? 'PostgreSQL URI' : 'MongoDB URI'))
+const uriPlaceholder = computed(() =>
+  isPostgres.value ? 'postgresql://user:pass@host:5432/dbname' : 'mongodb+srv://user:pass@host/db',
+)
+const objectNoun = computed(() => (isPostgres.value ? 'tables' : 'collections'))
+
+function onDatabaseTypeChange() {
+  probed.value = []
+  probeError.value = ''
+  selectedDb.value = ''
+  form.collectionFilter.collections = []
+}
+
 const selectedDb = ref<string>(form.includeDbs[0] || '')
 
 function parseDbFromUri(uri: string): string {
   const trimmed = (uri || '').trim()
   if (!trimmed) return ''
-  const match = trimmed.match(/^mongodb(?:\+srv)?:\/\/[^/?#]+\/([^/?#]+)/i)
+  // Matches mongodb://host/db, mongodb+srv://host/db, postgresql://host:port/db, postgres://host/db
+  const match = trimmed.match(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]+\/([^/?#]+)/i)
   return match && match[1] ? decodeURIComponent(match[1]) : ''
 }
 
@@ -407,7 +449,11 @@ function stripDbPrefix(patterns: string[], db: string): string[] {
   return patterns.map((p) => (p.startsWith(prefix) ? p.slice(prefix.length) : p))
 }
 
-const patternsRaw = ref(stripDbPrefix(form.collectionFilter.patterns, selectedDb.value).join('\n'))
+const patternsRaw = ref(
+  form.databaseType === 'postgresql'
+    ? form.collectionFilter.patterns.join('\n')
+    : stripDbPrefix(form.collectionFilter.patterns, selectedDb.value).join('\n'),
+)
 watch(patternsRaw, (v) => {
   form.collectionFilter.patterns = v.split('\n').map((s) => s.trim()).filter(Boolean)
 })
@@ -513,10 +559,12 @@ async function fetchCollections() {
   probeLoading.value = true
   probeError.value = ''
   try {
-    const body: { mongoUri?: string; targetId?: string } = {}
+    const body: { mongoUri?: string; targetId?: string; databaseType?: DatabaseType } = {
+      databaseType: form.databaseType,
+    }
     if (form.mongoUri && form.mongoUri.trim()) body.mongoUri = form.mongoUri.trim()
     else if (form._id) body.targetId = form._id
-    else throw new Error('Enter a MongoDB URI first')
+    else throw new Error(`Enter a ${uriLabel.value} first`)
     probed.value = await api.post<ProbedDb[]>('/api/targets/probe-collections', body)
     // Auto-select DB if URI provides one and it exists in probe.
     if (!selectedDb.value) {
@@ -535,11 +583,12 @@ async function fetchCollections() {
   }
 }
 
+const uriSchemeRe = /^(mongodb(\+srv)?|postgres(ql)?):\/\/.+/i
 let uriDebounce: ReturnType<typeof setTimeout> | null = null
 watch(() => form.mongoUri, (uri) => {
   if (uriDebounce) clearTimeout(uriDebounce)
   const trimmed = (uri || '').trim()
-  if (!trimmed || !/^mongodb(\+srv)?:\/\/.+/.test(trimmed)) return
+  if (!trimmed || !uriSchemeRe.test(trimmed)) return
   // If URI has an explicit DB, prefer it as selectedDb (only when user hasn't picked another).
   const fromUri = parseDbFromUri(trimmed)
   if (fromUri && !selectedDb.value) selectedDb.value = fromUri
@@ -603,11 +652,12 @@ function onSubmit() {
     return
   }
   const db = selectedDb.value
-  const prefix = `${db}.`
-  const patterns = form.collectionFilter.patterns.map((p) =>
-    p.includes('.') ? p : prefix + p,
-  )
   const collections = form.collectionFilter.collections.filter((c) => c.db === db)
+  // Mongo stores patterns globally as `<db>.<collection>`; Postgres patterns map
+  // straight to pg_dump --table/--exclude-table, so they stay as the user typed them.
+  const patterns = isPostgres.value
+    ? form.collectionFilter.patterns
+    : form.collectionFilter.patterns.map((p) => (p.includes('.') ? p : `${db}.${p}`))
   emit('submit', {
     ...form,
     includeDbs: [db],

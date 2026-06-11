@@ -63,7 +63,9 @@ export class TargetsController {
   }
 
   @Post('/probe-collections')
-  async probeCollections(@Body() body: { mongoUri?: string; targetId?: string }) {
+  async probeCollections(
+    @Body() body: { mongoUri?: string; targetId?: string; databaseType?: 'mongodb' | 'postgresql' },
+  ) {
     return sendSuccess(await this.probe.probe(body || {}))
   }
 }

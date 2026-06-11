@@ -109,6 +109,7 @@ interface Target {
   _id: string
   name: string
   description: string
+  databaseType?: 'mongodb' | 'postgresql'
   mongoUri?: string
   includeDbs: string[]
   excludeDbs: string[]

@@ -27,9 +27,10 @@ export function getMachineId(): string {
   return cached
 }
 
-export function isLocalMongoUri(uri: string): boolean {
+// Works for any URI scheme (mongodb://, mongodb+srv://, postgresql://, postgres://).
+export function isLocalDbUri(uri: string): boolean {
   if (!uri) return false
-  const m = uri.match(/^mongodb(?:\+srv)?:\/\/(?:[^@]*@)?([^/?]+)/i)
+  const m = uri.match(/^[a-z][a-z0-9+.-]*:\/\/(?:[^@]*@)?([^/?]+)/i)
   if (!m || !m[1]) return false
   const hosts = m[1].split(',').map((h) => h.split(':')[0]!.trim().toLowerCase())
   return hosts.every(

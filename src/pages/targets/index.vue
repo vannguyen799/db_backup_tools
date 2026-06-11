@@ -3,7 +3,7 @@
     <div class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-xl font-semibold">Backup Targets</h1>
-        <p class="text-sm text-[var(--color-text-muted)] mt-0.5">MongoDB sources to dump and ship to Drive</p>
+        <p class="text-sm text-[var(--color-text-muted)] mt-0.5">MongoDB &amp; PostgreSQL sources to dump and ship to Drive</p>
       </div>
       <div class="flex items-center gap-2">
         <button class="btn" :disabled="refreshing" @click="refresh">{{ refreshing ? '↻ Refreshing…' : '↻ Refresh' }}</button>
@@ -20,6 +20,7 @@
         <thead>
           <tr>
             <th>Name</th>
+            <th>Type</th>
             <th>Cron</th>
             <th>GDrive Folder</th>
             <th>Retention</th>
@@ -39,6 +40,7 @@
               <span class="text-[var(--color-accent)]">{{ t.name }}</span>
               <div v-if="t.description" class="text-xs text-[var(--color-text-muted)] mt-0.5">{{ t.description }}</div>
             </td>
+            <td><span class="badge text-xs">{{ t.databaseType === 'postgresql' ? 'PostgreSQL' : 'MongoDB' }}</span></td>
             <td><code class="text-xs">{{ t.cronExpression }}</code></td>
             <td>{{ t.gdriveFolderName || 'My Drive' }}</td>
             <td>{{ retentionLabel(t.retention) }}</td>
@@ -66,6 +68,7 @@ interface Target {
   _id: string
   name: string
   description: string
+  databaseType?: 'mongodb' | 'postgresql'
   cronExpression: string
   gdriveFolderId: string
   gdriveFolderName: string

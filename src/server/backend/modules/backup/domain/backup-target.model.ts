@@ -31,6 +31,10 @@ const backupTargetSchema = new Schema(
     name: { type: String, required: true, trim: true },
     description: { type: String, default: '' },
 
+    databaseType: { type: String, enum: ['mongodb', 'postgresql'], default: 'mongodb' },
+
+    // Stores the encrypted connection URI for whichever databaseType is selected
+    // (kept under the original field name to avoid migrating existing documents).
     mongoUriEncrypted: { type: String, required: true },
 
     includeDbs: { type: [String], default: [] },

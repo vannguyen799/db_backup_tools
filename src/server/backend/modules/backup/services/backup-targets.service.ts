@@ -3,7 +3,7 @@ import { Injectable, Inject, AppError, NotFoundError } from 'truxie'
 import { BackupTargetRepository } from '../domain/backup-target.repository'
 import { BackupSchedulerService } from './backup-scheduler.service'
 import { encryptString, decryptString } from '~/server/utils/crypto'
-import { getMachineId, isLocalMongoUri } from '~/server/utils/machine-id'
+import { getMachineId, isLocalDbUri } from '~/server/utils/machine-id'
 
 function normalizeCollectionFilter(input?: CollectionFilterInput) {
   const mode: 'exclude' | 'include' = input?.mode === 'include' ? 'include' : 'exclude'
@@ -28,9 +28,12 @@ export interface CollectionFilterInput {
   patterns?: string[]
 }
 
+export type DatabaseType = 'mongodb' | 'postgresql'
+
 export interface CreateTargetInput {
   name: string
   description?: string
+  databaseType?: DatabaseType
   mongoUri: string
   includeDbs?: string[]
   excludeDbs?: string[]
@@ -86,9 +89,11 @@ export class BackupTargetsService {
     if (!input.cronExpression || !cronLib.validate(input.cronExpression)) {
       throw new AppError('invalid cronExpression', 400)
     }
+    const databaseType: DatabaseType = input.databaseType === 'postgresql' ? 'postgresql' : 'mongodb'
     const created = await this.repo.create({
       name: input.name.trim(),
       description: input.description || '',
+      databaseType,
       mongoUriEncrypted: encryptString(input.mongoUri),
       includeDbs: input.includeDbs || [],
       excludeDbs: input.excludeDbs || [],
@@ -103,7 +108,7 @@ export class BackupTargetsService {
         keepDays: input.retention?.keepDays ?? 30,
       },
       enabled: input.enabled !== false,
-      machineId: isLocalMongoUri(input.mongoUri) ? getMachineId() : '',
+      machineId: isLocalDbUri(input.mongoUri) ? getMachineId() : '',
     })
     await this.scheduler.reload()
     const { mongoUriEncrypted: _drop, ...rest } = created.toObject()
@@ -114,9 +119,12 @@ export class BackupTargetsService {
     const patch: Record<string, unknown> = {}
     if (typeof input.name === 'string') patch.name = input.name.trim()
     if (typeof input.description === 'string') patch.description = input.description
+    if (input.databaseType === 'mongodb' || input.databaseType === 'postgresql') {
+      patch.databaseType = input.databaseType
+    }
     if (typeof input.mongoUri === 'string' && input.mongoUri.length > 0) {
       patch.mongoUriEncrypted = encryptString(input.mongoUri)
-      patch.machineId = isLocalMongoUri(input.mongoUri) ? getMachineId() : ''
+      patch.machineId = isLocalDbUri(input.mongoUri) ? getMachineId() : ''
     } else if (input.regenerateMachineId) {
       const existing = await this.repo.findById(id)
       if (!existing) throw new NotFoundError('Target not found')

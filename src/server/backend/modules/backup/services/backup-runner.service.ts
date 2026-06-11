@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import zlib from 'node:zlib'
 import { spawn } from 'node:child_process'
 import { Injectable, Inject, NotFoundError } from 'truxie'
 import { BACKUP_MODULE_OPTIONS, type BackupModuleConfig } from '../backup.config'
@@ -77,6 +78,11 @@ interface SingleArchivePlan {
 }
 
 type DumpPlan = SingleArchivePlan | BundlePlan
+
+interface PgDumpPlan {
+  includeTables: string[]
+  excludeTables: string[]
+}
 
 @Injectable()
 @Inject(BACKUP_MODULE_OPTIONS, BackupTargetRepository, BackupJobRepository, GoogleDriveService, SourceProbeService)
@@ -186,6 +192,62 @@ export class BackupRunnerService {
         else reject(new Error(`${bin} exited with code ${code}\n${stderr}`))
       })
     })
+  }
+
+  // Spawn a process and stream its stdout through gzip into outPath (used for pg_dump | gzip).
+  private runGzipProcess(bin: string, args: string[], outPath: string): Promise<{ stderr: string }> {
+    return new Promise((resolve, reject) => {
+      const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+      let stderr = ''
+      let settled = false
+      let exitCode: number | null = null
+      let fileClosed = false
+
+      const fail = (err: Error) => {
+        if (settled) return
+        settled = true
+        reject(err)
+      }
+      const maybeResolve = () => {
+        if (settled || exitCode === null || !fileClosed) return
+        if (exitCode === 0) {
+          settled = true
+          resolve({ stderr })
+        } else {
+          fail(new Error(`${bin} exited with code ${exitCode}\n${stderr}`))
+        }
+      }
+
+      child.stderr.on('data', (d) => (stderr += d.toString()))
+      child.on('error', fail)
+
+      const gzip = zlib.createGzip()
+      const out = fs.createWriteStream(outPath)
+      gzip.on('error', fail)
+      out.on('error', fail)
+      out.on('close', () => { fileClosed = true; maybeResolve() })
+      child.on('close', (code) => { exitCode = code; maybeResolve() })
+
+      child.stdout.pipe(gzip).pipe(out)
+    })
+  }
+
+  private planPgDump(target: IBackupTarget): PgDumpPlan {
+    const filter = target.collectionFilter
+    const names = (filter?.collections || []).map((c) => c.name).filter(Boolean)
+    const patterns = (filter?.patterns || []).filter(Boolean)
+    const tables = Array.from(new Set([...names, ...patterns]))
+    if (!tables.length) return { includeTables: [], excludeTables: [] }
+    if (filter?.mode === 'include') return { includeTables: tables, excludeTables: [] }
+    return { includeTables: [], excludeTables: tables }
+  }
+
+  private dumpPostgres(opts: { uri: string; outPath: string; plan: PgDumpPlan }) {
+    const bin = this.config.pgDumpBin || 'pg_dump'
+    const args = [`--dbname=${opts.uri}`, '--no-owner', '--no-privileges']
+    for (const t of opts.plan.includeTables) if (t) args.push(`--table=${t}`)
+    for (const t of opts.plan.excludeTables) if (t) args.push(`--exclude-table=${t}`)
+    return this.runGzipProcess(bin, args, opts.outPath)
   }
 
   private dumpSingleArchive(opts: { mongoUri: string; archivePath: string; includeDbs: string[]; excludeDbs: string[] }) {
@@ -310,17 +372,36 @@ export class BackupRunnerService {
         throw new Error('Target has no Google account selected. Pick one in the target settings.')
       }
       const accountId = String(target.googleAuthId)
-      const mongoUri = decryptString(target.mongoUriEncrypted)
+      const connectionUri = decryptString(target.mongoUriEncrypted)
+      const isPostgres = target.databaseType === 'postgresql'
 
+      if (isPostgres) {
+        outputFilename = `${baseName}.sql.gz`
+        outputPath = path.join(tmpRoot, outputFilename)
+        const plan = this.planPgDump(target)
+        const scope = plan.includeTables.length
+          ? `including ${plan.includeTables.join(', ')}`
+          : plan.excludeTables.length
+            ? `excluding ${plan.excludeTables.join(', ')}`
+            : 'whole database'
+        append(`Running pg_dump (${scope})...`)
+        const r = await withRetry('pg_dump', () => this.dumpPostgres({
+          uri: connectionUri,
+          outPath: outputPath,
+          plan,
+        }), append)
+        if (r.stderr) append(`pg_dump stderr:\n${r.stderr.trim()}`)
+        await this.jobs.update(String(job._id), { archiveFilename: outputFilename })
+      } else {
       append('Planning dump...')
-      const plan = await this.planDump(target, mongoUri)
+      const plan = await this.planDump(target, connectionUri)
 
       if (plan.kind === 'single') {
         outputFilename = `${baseName}.archive.gz`
         outputPath = path.join(tmpRoot, outputFilename)
         append('Running mongodump (single archive)...')
         const r = await withRetry('mongodump', () => this.dumpSingleArchive({
-          mongoUri,
+          mongoUri: connectionUri,
           archivePath: outputPath,
           includeDbs: plan.includeDbs,
           excludeDbs: plan.excludeDbs,
@@ -337,7 +418,7 @@ export class BackupRunnerService {
           const archivePath = path.join(workDir, filename)
           append(`mongodump db=${p.db}${p.excludeCollections.length ? ` excludes=${p.excludeCollections.join(',')}` : ''}${p.excludePrefixes.length ? ` excludePrefixes=${p.excludePrefixes.join(',')}` : ''}`)
           const r = await withRetry(`mongodump db=${p.db}`, () => this.dumpDbWithExcludes({
-            mongoUri,
+            mongoUri: connectionUri,
             archivePath,
             db: p.db,
             excludeCollections: p.excludeCollections,
@@ -350,7 +431,7 @@ export class BackupRunnerService {
           const archivePath = path.join(workDir, filename)
           append(`mongodump db=${p.db} collection=${p.collection}`)
           const r = await withRetry(`mongodump db=${p.db} collection=${p.collection}`, () => this.dumpCollection({
-            mongoUri,
+            mongoUri: connectionUri,
             archivePath,
             db: p.db,
             collection: p.collection,
@@ -362,6 +443,7 @@ export class BackupRunnerService {
         append(`Bundling ${fs.readdirSync(workDir).length} archive(s) into ${outputFilename}`)
         await this.tarBundle(workDir, outputPath)
         await this.jobs.update(String(job._id), { archiveFilename: outputFilename })
+      }
       }
 
       const stat = fs.statSync(outputPath)

@@ -72,6 +72,7 @@ export default defineNuxtConfig({
 
     backupTmpDir: process.env.BACKUP_TMP_DIR || '/tmp/mongo-backup',
     mongodumpBin: process.env.MONGODUMP_BIN || 'mongodump',
+    pgDumpBin: process.env.PGDUMP_BIN || 'pg_dump',
     schedulerEnabled: process.env.SCHEDULER_ENABLED !== 'false',
 
     public: {
