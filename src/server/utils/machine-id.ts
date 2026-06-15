@@ -30,10 +30,16 @@ export function getMachineId(): string {
 // Works for any URI scheme (mongodb://, mongodb+srv://, postgresql://, postgres://).
 export function isLocalDbUri(uri: string): boolean {
   if (!uri) return false
-  const m = uri.match(/^[a-z][a-z0-9+.-]*:\/\/(?:[^@]*@)?([^/?]+)/i)
-  if (!m || !m[1]) return false
-  const hosts = m[1].split(',').map((h) => h.split(':')[0]!.trim().toLowerCase())
+  // Capture the authority: everything after :// up to the next / ? # or end.
+  const m = uri.match(/^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i)
+  if (!m) return false
+  // Strip userinfo (user:pass@). libpq / node-postgres treat a hostless connection
+  // string (e.g. postgresql:///db or postgres://user@/db) as the LOCAL server, so an
+  // empty authority counts as local — exactly the case that should be machine-pinned.
+  const authority = m[1]!.replace(/^[^@]*@/, '')
+  if (!authority) return true
+  const hosts = authority.split(',').map((h) => h.split(':')[0]!.trim().toLowerCase())
   return hosts.every(
-    (h) => h === 'localhost' || h === '0.0.0.0' || h === '::1' || h === '[::1]' || h.startsWith('127.'),
+    (h) => h === '' || h === 'localhost' || h === '0.0.0.0' || h === '::1' || h === '[::1]' || h.startsWith('127.'),
   )
 }
