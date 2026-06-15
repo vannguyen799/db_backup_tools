@@ -427,7 +427,13 @@ function onDatabaseTypeChange() {
   probed.value = []
   probeError.value = ''
   selectedDb.value = ''
+  // Fully reset the filter — patterns are interpreted differently per engine (Mongo
+  // strips a `<db>.` prefix / expands trailing `*`; Postgres passes them verbatim to
+  // pg_dump --table), so a leftover pattern would silently scope the new target wrong.
   form.collectionFilter.collections = []
+  form.collectionFilter.patterns = []
+  patternsRaw.value = ''
+  form.collectionFilter.mode = 'exclude'
 }
 
 const selectedDb = ref<string>(form.includeDbs[0] || '')
