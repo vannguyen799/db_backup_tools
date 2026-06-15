@@ -200,33 +200,52 @@ export class BackupRunnerService {
       const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
       let stderr = ''
       let settled = false
+      let childExited = false
       let exitCode: number | null = null
+      let exitSignal: NodeJS.Signals | null = null
       let fileClosed = false
+
+      const gzip = zlib.createGzip()
+      const out = fs.createWriteStream(outPath)
 
       const fail = (err: Error) => {
         if (settled) return
         settled = true
+        // Tear down a still-running dump and its pipeline so we don't leak the child
+        // process, its server-side DB connection, or the open file handle, and drop
+        // the partial/corrupt archive before withRetry spawns the next attempt.
+        if (!child.killed) child.kill('SIGKILL')
+        gzip.destroy()
+        out.destroy()
+        fs.unlink(outPath, () => {})
         reject(err)
       }
-      const maybeResolve = () => {
-        if (settled || exitCode === null || !fileClosed) return
+      const maybeSettle = () => {
+        // Require BOTH the child to have exited and the gzip output to be flushed/closed.
+        // Track exit with a dedicated flag — a signal kill reports code === null, which
+        // must be treated as failure, not as "not exited yet".
+        if (settled || !childExited || !fileClosed) return
         if (exitCode === 0) {
           settled = true
           resolve({ stderr })
         } else {
-          fail(new Error(`${bin} exited with code ${exitCode}\n${stderr}`))
+          const how = exitSignal ? `signal ${exitSignal}` : `code ${exitCode}`
+          fail(new Error(`${bin} exited with ${how}\n${stderr}`))
         }
       }
 
       child.stderr.on('data', (d) => (stderr += d.toString()))
       child.on('error', fail)
 
-      const gzip = zlib.createGzip()
-      const out = fs.createWriteStream(outPath)
       gzip.on('error', fail)
       out.on('error', fail)
-      out.on('close', () => { fileClosed = true; maybeResolve() })
-      child.on('close', (code) => { exitCode = code; maybeResolve() })
+      out.on('close', () => { fileClosed = true; maybeSettle() })
+      child.on('close', (code, signal) => {
+        childExited = true
+        exitCode = code
+        exitSignal = signal
+        maybeSettle()
+      })
 
       child.stdout.pipe(gzip).pipe(out)
     })
@@ -237,7 +256,15 @@ export class BackupRunnerService {
     const names = (filter?.collections || []).map((c) => c.name).filter(Boolean)
     const patterns = (filter?.patterns || []).filter(Boolean)
     const tables = Array.from(new Set([...names, ...patterns]))
-    if (!tables.length) return { includeTables: [], excludeTables: [] }
+    if (!tables.length) {
+      // "Include nothing" must NOT fall through to a whole-database dump: pg_dump with
+      // no --table flags dumps everything, which is the opposite of the user's intent.
+      // Fail loudly instead, mirroring the Mongo path's empty-plan rejection.
+      if (filter?.mode === 'include') {
+        throw new Error('Include filter selected no tables — refusing to dump the whole database')
+      }
+      return { includeTables: [], excludeTables: [] }
+    }
     if (filter?.mode === 'include') return { includeTables: tables, excludeTables: [] }
     return { includeTables: [], excludeTables: tables }
   }
@@ -286,7 +313,13 @@ export class BackupRunnerService {
     if (!target.gdriveFolderId || !target.retention || target.retention.mode === 'none') return []
     const removed: string[] = []
     try {
-      const files = await this.gdrive.listFilesInFolder(accountId, target.gdriveFolderId)
+      // Retention must only ever touch THIS target's own archives. Several targets can
+      // share one Drive folder and now emit different extensions (.sql.gz vs .archive.gz),
+      // so deleting from the raw folder listing would clobber other targets' backups.
+      // Every artifact this target produces is named `${safeName(target.name)}__<ts>...`.
+      const prefix = `${safeName(target.name)}__`
+      const files = (await this.gdrive.listFilesInFolder(accountId, target.gdriveFolderId))
+        .filter((f) => f.name.startsWith(prefix))
       if (target.retention.mode === 'count') {
         const keep = target.retention.keepCount || 7
         for (const f of files.slice(keep)) {
