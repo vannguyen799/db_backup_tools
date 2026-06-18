@@ -105,7 +105,49 @@ src/
 | POST | `/api/gdrive/disconnect` | ✓ | Revoke local tokens |
 | GET | `/api/gdrive/folders` | ✓ | List folders (`?parentId=`) |
 | POST | `/api/gdrive/folders` | ✓ | Get-or-create folder |
+| GET | `/api/api-keys` | ✓ | List API keys (hash redacted) |
+| POST | `/api/api-keys` | ✓ | Mint a key bound to one target — body: `{name, targetId, expiresAt?}`; returns plaintext **once** |
+| DELETE | `/api/api-keys/:id` | ✓ | Revoke a key |
+| POST | `/api/sync` | 🔑 | Trigger the key's bound target (async) → `{jobId}` |
+| POST | `/api/sync/:id` | 🔑 | Trigger target `:id` (must match the key) → `{jobId}` |
+| GET | `/api/sync/job/:jobId` | 🔑 | Poll job status (own target only) |
 | GET | `/api/health` | – | Health probe |
+
+Auth legend: **✓** = session JWT (`Authorization: Bearer <jwt>`), **🔑** = API key (`X-API-Key: <key>` or `Authorization: Bearer <key>`), **–** = public.
+
+## Triggering backups from CI/CD
+
+External systems trigger a backup with an API key instead of a user session. A key is **hard-locked to a single target**, so leaking it can only ever back up that one database — never read or trigger anything else.
+
+1. Create a target for the project's DB (UI → Backup Targets, or `POST /api/targets`).
+2. UI → **API Keys** → pick the target → **Create key**, and copy the `bk_live_…` value (shown once).
+3. Store it as a secret in the other project's CI and call `/api/sync`.
+
+**GitHub Actions** — trigger and wait for success:
+
+```yaml
+- name: Back up database
+  env:
+    BK_HOST: https://backup.example.com
+    BK_KEY: ${{ secrets.BACKUP_API_KEY }}
+  run: |
+    job=$(curl -fsS -X POST "$BK_HOST/api/sync" -H "X-API-Key: $BK_KEY" | jq -r .data.jobId)
+    echo "Started job $job"
+    for i in $(seq 1 60); do
+      sleep 5
+      status=$(curl -fsS "$BK_HOST/api/sync/job/$job" -H "X-API-Key: $BK_KEY" | jq -r .data.status)
+      echo "status=$status"
+      [ "$status" = "success" ] && exit 0
+      [ "$status" = "failed" ]  && { echo "Backup failed"; exit 1; }
+    done
+    echo "Timed out waiting for backup"; exit 1
+```
+
+**Fire-and-forget** (any CI, or a plain cron box) — just kick it off:
+
+```bash
+curl -fsS -X POST "$BK_HOST/api/sync" -H "X-API-Key: $BK_KEY"
+```
 
 ## Restoring a backup
 
@@ -129,6 +171,7 @@ done
 - The MongoDB URIs you back up live in the config DB **encrypted** (AES-256-GCM, key from `ENCRYPTION_KEY`). Rotate the key by re-saving each target's URI after updating the env.
 - Refresh tokens for Drive are encrypted the same way.
 - The session token is a 30d JWT signed with `JWT_SECRET`. Set it to a strong random value.
+- API keys are stored **SHA-256 hashed** (never in plaintext), each locked to one target, with optional expiry and one-click revoke. Only the non-secret `bk_live_…` prefix is kept for display.
 - `drive.file` scope means this app can only see files it created — it cannot read your existing Drive contents.
 
 ## License

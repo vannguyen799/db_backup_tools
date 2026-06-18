@@ -13,6 +13,7 @@
         <NuxtLink to="/" class="nav-link" exact-active-class="active">Dashboard</NuxtLink>
         <NuxtLink to="/targets" class="nav-link" active-class="active">Backup Targets</NuxtLink>
         <NuxtLink to="/jobs" class="nav-link" active-class="active">Jobs</NuxtLink>
+        <NuxtLink to="/api-keys" class="nav-link" active-class="active">API Keys</NuxtLink>
         <NuxtLink to="/settings" class="nav-link" active-class="active">Settings</NuxtLink>
       </nav>
 
