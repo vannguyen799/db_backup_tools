@@ -84,6 +84,15 @@ interface PgDumpPlan {
   excludeTables: string[]
 }
 
+export type TriggeredBy = 'cron' | 'manual' | 'api'
+
+interface PreparedRun {
+  target: IBackupTarget
+  job: Awaited<ReturnType<BackupJobRepository['create']>>
+  baseName: string
+  tmpRoot: string
+}
+
 @Injectable()
 @Inject(BACKUP_MODULE_OPTIONS, BackupTargetRepository, BackupJobRepository, GoogleDriveService, SourceProbeService)
 export class BackupRunnerService {
@@ -341,7 +350,33 @@ export class BackupRunnerService {
     return removed
   }
 
-  async run(targetId: string, triggeredBy: 'cron' | 'manual') {
+  /** Run a backup to completion and return the final job (used by cron + manual UI trigger). */
+  async run(targetId: string, triggeredBy: TriggeredBy, reason?: string) {
+    const prep = await this.prepare(targetId, triggeredBy, reason)
+    if ('failedJob' in prep) return prep.failedJob
+    return this.execute(prep)
+  }
+
+  /**
+   * Create the BackupJob synchronously and return it immediately while the dump
+   * and upload run in the background. Used by the API trigger so callers get a
+   * jobId to poll without waiting for the whole backup to finish.
+   */
+  async start(targetId: string, triggeredBy: TriggeredBy, reason?: string) {
+    const prep = await this.prepare(targetId, triggeredBy, reason)
+    if ('failedJob' in prep) return prep.failedJob
+    this.execute(prep).catch((err) => {
+      log.error(`[${prep.target.name}] backup crashed: ${(err as Error).message}`)
+    })
+    return prep.job
+  }
+
+  /** Validate the target + machine binding and create the running job record. */
+  private async prepare(
+    targetId: string,
+    triggeredBy: TriggeredBy,
+    reason?: string,
+  ): Promise<{ failedJob: PreparedRun['job'] } | PreparedRun> {
     const target = await this.targets.findById(targetId)
     if (!target) throw new NotFoundError(`Target ${targetId} not found`)
 
@@ -354,11 +389,12 @@ export class BackupRunnerService {
           `but this server's machine-id is "${current}". ` +
           `Open the target in the edit page and click "Rebind to this server" if intended.`
         log.warn(`[${target.name}] ${msg}`)
-        const job = await this.jobs.create({
+        const failedJob = await this.jobs.create({
           targetId: target._id,
           targetName: target.name,
           status: 'failed',
           triggeredBy,
+          reason: reason?.trim() || undefined,
           startedAt: now,
           finishedAt: now,
           durationMs: 0,
@@ -367,7 +403,7 @@ export class BackupRunnerService {
           error: 'Machine-id binding mismatch',
         })
         await this.targets.patchStatus(String(target._id), now, 'failed')
-        return job
+        return { failedJob }
       }
     }
 
@@ -379,11 +415,19 @@ export class BackupRunnerService {
       targetName: target.name,
       status: 'running',
       triggeredBy,
+      reason: reason?.trim() || undefined,
       startedAt: new Date(),
       archiveFilename: `${baseName}.archive.gz`, // overwritten below for bundle mode
     })
 
     await this.targets.patchStatus(String(target._id), new Date(), 'running')
+
+    return { target: target as unknown as IBackupTarget, job, baseName, tmpRoot }
+  }
+
+  /** Perform the actual dump, upload, retention and final status update. */
+  private async execute(prep: PreparedRun) {
+    const { target, job, baseName, tmpRoot } = prep
 
     const logLines: string[] = []
     const append = (line: string) => {

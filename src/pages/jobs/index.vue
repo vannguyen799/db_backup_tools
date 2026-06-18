@@ -17,6 +17,7 @@
             <th>Target</th>
             <th>Status</th>
             <th>Trigger</th>
+            <th>Reason</th>
             <th>Duration</th>
             <th>Size</th>
             <th>Started</th>
@@ -27,6 +28,12 @@
             <td>{{ j.targetName }}</td>
             <td><JobStatusBadge :status="j.status" /></td>
             <td><span class="badge">{{ j.triggeredBy }}</span></td>
+            <td>
+              <div
+                class="max-w-[22rem] truncate text-xs text-[var(--color-text-muted)]"
+                :title="j.reason || ''"
+              >{{ j.reason || '—' }}</div>
+            </td>
             <td>{{ formatDuration(j.durationMs) }}</td>
             <td>{{ formatBytes(j.archiveSizeBytes) }}</td>
             <td>{{ formatDate(j.startedAt) }}</td>
@@ -46,6 +53,7 @@ interface Job {
   targetName: string
   status: string
   triggeredBy: string
+  reason?: string | null
   durationMs?: number
   archiveSizeBytes?: number
   startedAt?: string

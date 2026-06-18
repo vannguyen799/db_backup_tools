@@ -56,7 +56,7 @@ export class TargetsController {
   async run(@Param('id') id: string) {
     // Pre-flight: ensure target exists (throws NotFound if missing)
     const target = await this.targets.findById(id)
-    this.runner.run(id, 'manual').catch((err) => {
+    this.runner.run(id, 'manual', 'Manual run (dashboard)').catch((err) => {
       log.error(`Manual backup ${target.name} failed:`, (err as Error).message)
     })
     return sendSuccess({ targetId: id }, 'Backup started')

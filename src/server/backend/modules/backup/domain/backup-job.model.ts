@@ -11,7 +11,10 @@ const backupJobSchema = new Schema(
       default: 'pending',
       index: true,
     },
-    triggeredBy: { type: String, enum: ['cron', 'manual'], default: 'manual' },
+    triggeredBy: { type: String, enum: ['cron', 'manual', 'api'], default: 'manual' },
+    // Free-text "why this backup ran" — e.g. "pre-deploy app.ZynAlgo.com@a1b2c3d".
+    // Set by the API trigger (sync) and given sensible defaults for cron/manual.
+    reason: { type: String },
 
     startedAt: { type: Date },
     finishedAt: { type: Date },

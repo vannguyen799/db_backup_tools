@@ -64,7 +64,7 @@ export class BackupSchedulerService implements OnApplicationBootstrap, OnApplica
       const task = cron.schedule(expr, async () => {
         try {
           log.info(`Cron trigger: ${t.name}`)
-          await this.runner.run(id, 'cron')
+          await this.runner.run(id, 'cron', `Scheduled (cron ${expr})`)
         } catch (err) {
           log.error(`Cron run failed for ${t.name}:`, (err as Error).message)
         }

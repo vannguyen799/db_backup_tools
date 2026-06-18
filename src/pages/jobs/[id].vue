@@ -27,6 +27,10 @@
           <div class="label">Trigger</div>
           <span class="badge">{{ job.triggeredBy }}</span>
         </div>
+        <div v-if="job.reason">
+          <div class="label">Reason</div>
+          <div class="text-xs">{{ job.reason }}</div>
+        </div>
         <div>
           <div class="label">Started</div>
           <div>{{ formatDate(job.startedAt) }}</div>
