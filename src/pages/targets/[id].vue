@@ -94,13 +94,82 @@
           </li>
         </ul>
       </div>
+
+      <div v-show="active === 'apikeys'" class="space-y-4">
+        <div v-if="createdKey" class="panel p-6 border border-[var(--color-success)]">
+          <h3 class="text-sm font-semibold mb-1">✓ Key created — copy it now</h3>
+          <p class="text-sm text-[var(--color-text-muted)] mb-3">
+            Only shown once. Store it as a CI secret (e.g. <code class="text-xs">BACKUP_API_KEY</code>).
+          </p>
+          <div class="panel-2 p-3 flex items-center gap-2 mb-4">
+            <code class="font-mono text-xs text-[var(--color-accent)] break-all flex-1">{{ createdKey.key }}</code>
+            <button class="btn text-xs whitespace-nowrap" @click="copyKey(createdKey.key)">{{ keyCopied ? 'Copied ✓' : 'Copy' }}</button>
+          </div>
+          <div class="text-xs text-[var(--color-text-muted)] mb-1">Trigger this target from anywhere:</div>
+          <pre class="panel-2 p-3 font-mono text-xs overflow-x-auto whitespace-pre">{{ keyCurl(createdKey.key) }}</pre>
+          <button class="btn text-xs mt-3" @click="createdKey = null">Dismiss</button>
+        </div>
+
+        <div class="panel p-6">
+          <h3 class="text-sm font-semibold mb-1">Create API key</h3>
+          <p class="text-sm text-[var(--color-text-muted)] mb-4">
+            A machine key locked to <strong>{{ target?.name }}</strong> — it can trigger a backup of this target and nothing else.
+          </p>
+          <form class="space-y-3" @submit.prevent="createKey">
+            <div>
+              <label class="label">Name *</label>
+              <input v-model="keyForm.name" class="input" required placeholder="e.g. github-actions" />
+            </div>
+            <div>
+              <label class="label">Expires (optional)</label>
+              <input v-model="keyForm.expiresAt" type="date" class="input" />
+            </div>
+            <button class="btn btn-primary" :disabled="keyBusy || !keyForm.name">{{ keyBusy ? 'Creating…' : 'Create key' }}</button>
+            <span v-if="keyError" class="text-sm text-[var(--color-danger)] ml-2">{{ keyError }}</span>
+          </form>
+        </div>
+
+        <div class="panel p-5">
+          <h3 class="text-sm font-semibold mb-4">Keys for this target</h3>
+          <div v-if="!keys.length" class="text-sm text-[var(--color-text-muted)] py-6 text-center">
+            No API keys for this target yet.
+          </div>
+          <table v-else class="data">
+            <thead>
+              <tr><th>Name</th><th>Prefix</th><th>Last used</th><th>Expires</th><th>Created</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="k in keys" :key="k._id">
+                <td class="font-medium">{{ k.name }}</td>
+                <td><code class="text-xs">{{ k.prefix }}…</code></td>
+                <td>
+                  <span v-if="k.lastUsedAt">{{ formatRelative(k.lastUsedAt) }}</span>
+                  <span v-else class="text-[var(--color-text-muted)]">never</span>
+                </td>
+                <td>
+                  <span v-if="k.expiresAt" :class="isExpired(k.expiresAt) ? 'badge badge-warning' : ''">
+                    {{ isExpired(k.expiresAt) ? 'expired' : formatDate(k.expiresAt) }}
+                  </span>
+                  <span v-else class="text-[var(--color-text-muted)]">—</span>
+                </td>
+                <td class="text-xs text-[var(--color-text-muted)]">{{ formatDate(k.createdAt) }}</td>
+                <td class="text-right">
+                  <button class="btn btn-danger text-xs" :disabled="keyRevoking[k._id]" @click="revokeKey(k)">
+                    {{ keyRevoking[k._id] ? '…' : 'Revoke' }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { useApi } from '~/composables/useApi'
-import { formatBytes, formatDate, formatDuration } from '~/utils/format'
+import { formatBytes, formatDate, formatDuration, formatRelative } from '~/utils/format'
 
 const route = useRoute()
 const api = useApi()
@@ -144,11 +213,34 @@ interface Job {
   error?: string
 }
 
+interface ApiKeyRow {
+  _id: string
+  name: string
+  prefix: string
+  targetId: string
+  scopes: string[]
+  enabled: boolean
+  expiresAt?: string | null
+  lastUsedAt?: string | null
+  createdAt?: string
+}
+
+interface CreatedKey {
+  id: string
+  name: string
+  prefix: string
+  targetId: string
+  scopes: string[]
+  expiresAt?: string | null
+  key: string
+}
+
 const tabs = [
   { id: 'settings', label: 'Settings' },
   { id: 'history', label: 'History' },
+  { id: 'apikeys', label: 'API keys' },
 ] as const
-const active = ref<'settings' | 'history'>('settings')
+const active = ref<'settings' | 'history' | 'apikeys'>('settings')
 
 const target = ref<Target | null>(null)
 const jobs = ref<Job[]>([])
@@ -159,6 +251,14 @@ const error = ref('')
 const expanded = reactive<Record<string, boolean>>({})
 const downloading = reactive<Record<string, boolean>>({})
 const downloadErrors = reactive<Record<string, string>>({})
+
+const keys = ref<ApiKeyRow[]>([])
+const keyForm = reactive({ name: '', expiresAt: '' })
+const keyBusy = ref(false)
+const keyError = ref('')
+const createdKey = ref<CreatedKey | null>(null)
+const keyCopied = ref(false)
+const keyRevoking = reactive<Record<string, boolean>>({})
 
 function toggle(id: string) {
   expanded[id] = !expanded[id]
@@ -182,12 +282,14 @@ async function refresh() {
   refreshing.value = true
   try {
     const id = route.params.id as string
-    const [t, list] = await Promise.all([
+    const [t, list, allKeys] = await Promise.all([
       api.get<Target>(`/api/targets/${id}`),
       api.get<Job[]>(`/api/jobs?targetId=${id}&limit=50`),
+      api.get<ApiKeyRow[]>('/api/api-keys'),
     ])
     target.value = { ...t, mongoUri: '', googleAuthId: t.googleAuthId || undefined }
     jobs.value = list
+    keys.value = allKeys.filter((k) => k.targetId === id)
   } finally {
     loading.value = false
     refreshing.value = false
@@ -217,6 +319,51 @@ async function runNow() {
   await api.post(`/api/targets/${route.params.id}/run`)
   active.value = 'history'
   setTimeout(refresh, 1000)
+}
+
+function isExpired(d?: string | null) {
+  return !!d && new Date(d).getTime() < Date.now()
+}
+
+function keyCurl(key: string) {
+  const origin = import.meta.client ? window.location.origin : 'https://your-backup-host'
+  return `curl -X POST ${origin}/api/sync \\\n  -H "X-API-Key: ${key}"`
+}
+
+async function copyKey(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    keyCopied.value = true
+    setTimeout(() => { keyCopied.value = false }, 2000)
+  } catch { /* clipboard unavailable */ }
+}
+
+async function createKey() {
+  keyBusy.value = true
+  keyError.value = ''
+  try {
+    const payload: Record<string, unknown> = { name: keyForm.name, targetId: route.params.id }
+    if (keyForm.expiresAt) payload.expiresAt = keyForm.expiresAt
+    createdKey.value = await api.post<CreatedKey>('/api/api-keys', payload)
+    keyForm.name = ''
+    keyForm.expiresAt = ''
+    await refresh()
+  } catch (err) {
+    keyError.value = (err as Error).message
+  } finally {
+    keyBusy.value = false
+  }
+}
+
+async function revokeKey(k: ApiKeyRow) {
+  if (!confirm(`Revoke "${k.name}"? Any system using this key loses access immediately.`)) return
+  keyRevoking[k._id] = true
+  try {
+    await api.del(`/api/api-keys/${k._id}`)
+    await refresh()
+  } finally {
+    keyRevoking[k._id] = false
+  }
 }
 
 onMounted(refresh)
