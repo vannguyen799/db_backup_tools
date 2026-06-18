@@ -94,7 +94,7 @@ export class BackupTargetsService {
       name: input.name.trim(),
       description: input.description || '',
       databaseType,
-      mongoUriEncrypted: encryptString(input.mongoUri),
+      mongoUriEncrypted: encryptString(input.mongoUri.trim()),
       includeDbs: input.includeDbs || [],
       excludeDbs: input.excludeDbs || [],
       collectionFilter: normalizeCollectionFilter(input.collectionFilter) as never,
@@ -122,8 +122,8 @@ export class BackupTargetsService {
     if (input.databaseType === 'mongodb' || input.databaseType === 'postgresql') {
       patch.databaseType = input.databaseType
     }
-    if (typeof input.mongoUri === 'string' && input.mongoUri.length > 0) {
-      patch.mongoUriEncrypted = encryptString(input.mongoUri)
+    if (typeof input.mongoUri === 'string' && input.mongoUri.trim().length > 0) {
+      patch.mongoUriEncrypted = encryptString(input.mongoUri.trim())
       patch.machineId = isLocalDbUri(input.mongoUri) ? getMachineId() : ''
     } else if (input.regenerateMachineId) {
       const existing = await this.repo.findById(id)

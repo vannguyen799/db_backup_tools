@@ -24,6 +24,13 @@ services:
     volumes:
       - backup_tmp:/tmp/mongo-backup
       - /etc/machine-id:/etc/machine-id:ro
+    networks:
+      - default
+      - metrixcrm_default
 
 volumes:
   backup_tmp:
+
+networks:
+  metrixcrm_default:
+    external: true
