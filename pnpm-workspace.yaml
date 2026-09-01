@@ -6,3 +6,14 @@ onlyBuiltDependencies:
   - '@parcel/watcher'
   - esbuild
   - vue-demi
+
+# pnpm's supply-chain guard refuses any package published within the last 24
+# hours. `truxie` and its adapters are exempt because they are OURS, published
+# from this owner's own account and routinely consumed minutes after release;
+# every third-party dependency keeps the full 24h window.
+#
+# `truxie` needs its own entry: the glob only matches scoped names, so
+# `@truxie/*` does NOT cover the unscoped core.
+minimumReleaseAgeExclude:
+  - truxie
+  - "@truxie/*"

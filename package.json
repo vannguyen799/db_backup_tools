@@ -20,7 +20,8 @@
   "dependencies": {
     "@pinia/nuxt": "^0.11.3",
     "@tailwindcss/postcss": "^4.2.0",
-    "@truxie/nitro": "0.1.0-test.6",
+    "@truxie/nitro": "0.1.1",
+    "@truxie/schedule": "0.1.1",
     "bcryptjs": "^3.0.3",
     "dayjs": "^1.11.13",
     "google-auth-library": "^9.14.2",
@@ -33,7 +34,7 @@
     "pinia": "^2.3.0",
     "reflect-metadata": "^0.2.2",
     "tailwindcss": "^4.2.0",
-    "truxie": "0.1.0-test.17",
+    "truxie": "0.1.1",
     "vue": "^3.5.0",
     "vue-router": "^4.5.0"
   },

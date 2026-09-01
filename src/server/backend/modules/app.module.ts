@@ -1,5 +1,5 @@
 import { Module, type DynamicModule, type Type } from 'truxie'
-import { ScheduleModule } from 'truxie/schedule'
+import { ScheduleModule } from '@truxie/schedule'
 import { logger } from '~/server/utils/logger'
 
 import { AuthModule } from './auth/auth.module'

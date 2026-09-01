@@ -15,8 +15,11 @@ importers:
         specifier: ^4.2.0
         version: 4.3.0
       '@truxie/nitro':
-        specifier: 0.1.0-test.6
-        version: 0.1.0-test.6(h3@1.15.11)(truxie@0.1.0-test.17(croner@10.0.1))
+        specifier: 0.1.1
+        version: 0.1.1(h3@1.15.11)(truxie@0.1.1)
+      '@truxie/schedule':
+        specifier: 0.1.1
+        version: 0.1.1(croner@10.0.1)(truxie@0.1.1)
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -54,8 +57,8 @@ importers:
         specifier: ^4.2.0
         version: 4.3.0
       truxie:
-        specifier: 0.1.0-test.17
-        version: 0.1.0-test.17(croner@10.0.1)
+        specifier: 0.1.1
+        version: 0.1.1
       vue:
         specifier: ^3.5.0
         version: 3.5.34(typescript@5.9.3)
@@ -1516,12 +1519,19 @@ packages:
   '@tailwindcss/postcss@4.3.0':
     resolution: {integrity: sha512-Jm05Tjx+9yCLGv5qw1c+84Psds8MnyrEQYCB+FFk2lgGiUjlRqdxke4mVTuYrj2xnVZqKim2Apr5ySuQRYAw/w==}
 
-  '@truxie/nitro@0.1.0-test.6':
-    resolution: {integrity: sha512-pQOjlZrtRK7FwmVjvIijQEkXJdq8Nk0RxZwt5qLxbF347YlGyTLHuqsgMNUacJGVdSq+m9jtn8UwZYpQ3Clycg==}
-    engines: {node: '>=18.0.0'}
+  '@truxie/nitro@0.1.1':
+    resolution: {integrity: sha512-rxDUU8haeHKKs4mfv/aUD9wGKW9p4h+opqd6nser+ZIEM2TuWAXqEENErMujy0v6fZ9CtMebX/Dhj0fueTfxMQ==}
+    engines: {node: '>=20.0.0'}
     peerDependencies:
       h3: '>=1.0.0'
-      truxie: '>=0.1.0'
+      truxie: ^0.1.1
+
+  '@truxie/schedule@0.1.1':
+    resolution: {integrity: sha512-xc4B8SvkQE4PhRvSWJhtIOhPUIbfijhYa0Ra0CaGf0cgWHajSOND8i0+bA9/hIZ5AlXsyPHF76xH91AyXwwkLA==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
+      croner: ^9.0.0 || ^10.0.0
+      truxie: ^0.1.1
 
   '@tybys/wasm-util@0.10.2':
     resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
@@ -3702,20 +3712,9 @@ packages:
     resolution: {integrity: sha512-hdF5ZgjTqgAntKkklYw0R03MG2x/bSzTtkxmIRw/sTNV8YXsCJ1tfLAX23lhxhHJlEf3CRCOCGGWw3vI3GaSPw==}
     engines: {node: '>=18'}
 
-  truxie@0.1.0-test.17:
-    resolution: {integrity: sha512-rFBZzLzftGUTmwwHTta+Z7Y18ZdLHm9kmowdRSwtF2GS4W3DJAf4a8MnCIc9hgvGwG3/UHpUsK41sm26KLI2VQ==}
-    engines: {node: '>=18.0.0'}
-    peerDependencies:
-      bullmq: ^5.0.0
-      croner: ^9.0.0 || ^10.0.0
-      zod: ^3.22.0 || ^4.0.0
-    peerDependenciesMeta:
-      bullmq:
-        optional: true
-      croner:
-        optional: true
-      zod:
-        optional: true
+  truxie@0.1.1:
+    resolution: {integrity: sha512-aurcN42KqFhbaZlBKjL+Xci9sbMdtO+KXZ5UCbPtacCqLx5kib1hPTeSIoWSa+t6+uMA/HPuE7C5Xry5/uc1oA==}
+    engines: {node: '>=20.0.0'}
 
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
@@ -5404,10 +5403,15 @@ snapshots:
       postcss: 8.5.14
       tailwindcss: 4.3.0
 
-  '@truxie/nitro@0.1.0-test.6(h3@1.15.11)(truxie@0.1.0-test.17(croner@10.0.1))':
+  '@truxie/nitro@0.1.1(h3@1.15.11)(truxie@0.1.1)':
     dependencies:
       h3: 1.15.11
-      truxie: 0.1.0-test.17(croner@10.0.1)
+      truxie: 0.1.1
+
+  '@truxie/schedule@0.1.1(croner@10.0.1)(truxie@0.1.1)':
+    dependencies:
+      croner: 10.0.1
+      truxie: 0.1.1
 
   '@tybys/wasm-util@0.10.2':
     dependencies:
@@ -7894,11 +7898,9 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  truxie@0.1.0-test.17(croner@10.0.1):
+  truxie@0.1.1:
     dependencies:
       reflect-metadata: 0.2.2
-    optionalDependencies:
-      croner: 10.0.1
 
   tslib@2.8.1:
     optional: true
