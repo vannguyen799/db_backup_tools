@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "backup-tools": {
+      "type": "http",
+      "url": "${BACKUP_TOOLS_MCP_URL:-http://localhost:13280/mcp}",
+      "headers": {
+        "Authorization": "Bearer ${BACKUP_TOOLS_TOKEN}"
+      }
+    }
+  }
+}

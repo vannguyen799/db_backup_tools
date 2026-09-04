@@ -1,4 +1,5 @@
 import { Inject, Controller, Get, Post, RouteGuards, NoGuard, Param, Query, AppError, NotFoundError, createParamDecorator } from 'truxie'
+import { McpExpose } from '@truxie/mcp'
 import type { H3Event } from 'h3'
 import { AuthGuard } from '$/guards/auth.guard'
 import { BackupJobRepository } from '../domain/backup-job.repository'
@@ -22,6 +23,20 @@ export class JobsController {
   ) {}
 
   @Get('/')
+  @McpExpose({
+    summary: 'List backup jobs, newest first. Filter by target with `targetId`.',
+    description:
+      'One row per backup run: status, timing, archive size, Drive file id and the failure message when it failed.',
+    tags: ['jobs'],
+    querySchema: {
+      type: 'object',
+      properties: {
+        targetId: { type: 'string', description: 'Only jobs for this target. Omit for every target.' },
+        limit: { type: 'string', description: 'Rows to return, 1-500. Default 50.' },
+      },
+    },
+    related: ['GET /api/targets', 'GET /api/jobs/:id'],
+  })
   async list(@Query() query: { targetId?: string; limit?: string }) {
     const limit = query.limit ? Math.min(Math.max(parseInt(query.limit, 10) || 50, 1), 500) : 50
     const data = await this.jobs.list({ targetId: query.targetId, limit })
@@ -29,11 +44,24 @@ export class JobsController {
   }
 
   @Get('/recent')
+  @McpExpose({
+    summary: 'The 20 most recent backup jobs across every target.',
+    description: 'The quickest read on whether backups are healthy right now.',
+    tags: ['jobs'],
+    related: ['GET /api/jobs/stats'],
+  })
   async recent() {
     return sendSuccess(await this.jobs.recent(20))
   }
 
   @Get('/stats')
+  @McpExpose({
+    summary: 'Job counts by status, plus every schedule currently registered on this machine.',
+    description:
+      '`counts` totals jobs by status; `schedules` is what the cron scheduler actually holds — a target missing from it is not being backed up here.',
+    tags: ['jobs'],
+    related: ['GET /api/jobs/recent'],
+  })
   async stats() {
     const raw = await this.jobs.stats()
     const out: Record<string, number> = { success: 0, failed: 0, running: 0, pending: 0, cancelled: 0 }
@@ -45,6 +73,12 @@ export class JobsController {
   }
 
   @Get('/:id')
+  @McpExpose({
+    summary: 'One backup job in full, including its log output and failure reason.',
+    tags: ['jobs'],
+    errors: [{ status: 404, when: 'no job has that id', then: 'list jobs with GET /api/jobs first' }],
+    related: ['GET /api/jobs'],
+  })
   async get(@Param('id') id: string) {
     const job = await this.jobs.findById(id)
     if (!job) throw new NotFoundError('Job not found')

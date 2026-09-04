@@ -20,7 +20,10 @@
   "dependencies": {
     "@pinia/nuxt": "^0.11.3",
     "@tailwindcss/postcss": "^4.2.0",
+    "@truxie/jwt": "0.1.1",
+    "@truxie/mcp": "0.1.1",
     "@truxie/nitro": "0.1.1",
+    "@truxie/rbac": "0.1.1",
     "@truxie/schedule": "0.1.1",
     "bcryptjs": "^3.0.3",
     "dayjs": "^1.11.13",

@@ -74,6 +74,7 @@ export default defineNuxtConfig({
     mongodumpBin: process.env.MONGODUMP_BIN || 'mongodump',
     pgDumpBin: process.env.PGDUMP_BIN || 'pg_dump',
     schedulerEnabled: process.env.SCHEDULER_ENABLED !== 'false',
+    mcpEnabled: process.env.MCP_ENABLED !== 'false',
 
     public: {
       appUrl: process.env.APP_URL || 'http://localhost:13280',

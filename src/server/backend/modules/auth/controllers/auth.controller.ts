@@ -1,4 +1,5 @@
 import { Inject, Controller, Get, Post, RouteGuards, NoGuard, Body } from 'truxie'
+import { McpExpose } from '@truxie/mcp'
 import { AuthGuard, Auth, type AuthPayload } from '$/guards/auth.guard'
 import { AuthService } from '../services/auth.service'
 import { sendSuccess } from '~/server/utils/response'
@@ -17,6 +18,11 @@ export class AuthController {
   }
 
   @Get('/me')
+  @McpExpose({
+    summary: 'The account this connection is acting as.',
+    description: 'Login and password change are deliberately not exposed over MCP.',
+    tags: ['auth'],
+  })
   async me(@Auth() auth: AuthPayload) {
     const user = await this.authService.getMe(auth.id)
     return sendSuccess(user)

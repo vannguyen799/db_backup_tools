@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import { Inject, Controller, Get, Post, Patch, Delete, RouteGuards, NoGuard, Body, Param, Query, redirect } from 'truxie'
+import { McpExpose } from '@truxie/mcp'
 import { AuthGuard } from '$/guards/auth.guard'
 import { GoogleDriveService } from '../services/gdrive.service'
 import { sendSuccess } from '~/server/utils/response'
@@ -26,6 +27,12 @@ export class GoogleDriveController {
   constructor(private readonly gdrive: GoogleDriveService) {}
 
   @Get('/status')
+  @McpExpose({
+    summary: 'Google Drive connection status: the connected accounts and how credentials are supplied.',
+    description: 'A target cannot upload without a connected account — check here when a backup fails at the upload step.',
+    tags: ['gdrive'],
+    related: ['GET /api/gdrive/accounts'],
+  })
   async status() {
     const accounts = await this.gdrive.listAccounts()
     return sendSuccess({
@@ -36,6 +43,11 @@ export class GoogleDriveController {
   }
 
   @Get('/accounts')
+  @McpExpose({
+    summary: 'The connected Google accounts, with the id a target references as googleAuthId.',
+    tags: ['gdrive'],
+    related: ['POST /api/targets'],
+  })
   async listAccounts() {
     return sendSuccess(await this.gdrive.listAccounts())
   }

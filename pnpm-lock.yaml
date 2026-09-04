@@ -14,9 +14,18 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4.2.0
         version: 4.3.0
+      '@truxie/jwt':
+        specifier: 0.1.1
+        version: 0.1.1(truxie@0.1.1)
+      '@truxie/mcp':
+        specifier: 0.1.1
+        version: 0.1.1(@truxie/jwt@0.1.1(truxie@0.1.1))(@truxie/rbac@0.1.1(truxie@0.1.1))(truxie@0.1.1)
       '@truxie/nitro':
         specifier: 0.1.1
         version: 0.1.1(h3@1.15.11)(truxie@0.1.1)
+      '@truxie/rbac':
+        specifier: 0.1.1
+        version: 0.1.1(truxie@0.1.1)
       '@truxie/schedule':
         specifier: 0.1.1
         version: 0.1.1(croner@10.0.1)(truxie@0.1.1)
@@ -1519,11 +1528,31 @@ packages:
   '@tailwindcss/postcss@4.3.0':
     resolution: {integrity: sha512-Jm05Tjx+9yCLGv5qw1c+84Psds8MnyrEQYCB+FFk2lgGiUjlRqdxke4mVTuYrj2xnVZqKim2Apr5ySuQRYAw/w==}
 
+  '@truxie/jwt@0.1.1':
+    resolution: {integrity: sha512-Zfe8DnyXG1O3tpRAVmfk5p1lkZebLKc2t3YvI4BWkqEwq8wn0cNvaRh6F/xKmhzyigDIJMWK1SnDXB7mmuAbVw==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
+      truxie: ^0.1.1
+
+  '@truxie/mcp@0.1.1':
+    resolution: {integrity: sha512-FNCZ4F1qX2YTv0ahsMR457dl/d389LoqYb+ONkwXv17vqpM1c2u2ZW74Wf+5bfv/w+XRpgXfl8QgGNopJHCk9Q==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
+      '@truxie/jwt': ^0.1.1
+      '@truxie/rbac': ^0.1.1
+      truxie: ^0.1.1
+
   '@truxie/nitro@0.1.1':
     resolution: {integrity: sha512-rxDUU8haeHKKs4mfv/aUD9wGKW9p4h+opqd6nser+ZIEM2TuWAXqEENErMujy0v6fZ9CtMebX/Dhj0fueTfxMQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       h3: '>=1.0.0'
+      truxie: ^0.1.1
+
+  '@truxie/rbac@0.1.1':
+    resolution: {integrity: sha512-HM26psX2qGvW44SFZv0lWutLu5I44le7x91Gr71e7cmvTvTg+L7QXxK2kbvTlWCrT/DJQTeh68if18Lq4Q/DQA==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
       truxie: ^0.1.1
 
   '@truxie/schedule@0.1.1':
@@ -5403,9 +5432,23 @@ snapshots:
       postcss: 8.5.14
       tailwindcss: 4.3.0
 
+  '@truxie/jwt@0.1.1(truxie@0.1.1)':
+    dependencies:
+      truxie: 0.1.1
+
+  '@truxie/mcp@0.1.1(@truxie/jwt@0.1.1(truxie@0.1.1))(@truxie/rbac@0.1.1(truxie@0.1.1))(truxie@0.1.1)':
+    dependencies:
+      '@truxie/jwt': 0.1.1(truxie@0.1.1)
+      '@truxie/rbac': 0.1.1(truxie@0.1.1)
+      truxie: 0.1.1
+
   '@truxie/nitro@0.1.1(h3@1.15.11)(truxie@0.1.1)':
     dependencies:
       h3: 1.15.11
+      truxie: 0.1.1
+
+  '@truxie/rbac@0.1.1(truxie@0.1.1)':
+    dependencies:
       truxie: 0.1.1
 
   '@truxie/schedule@0.1.1(croner@10.0.1)(truxie@0.1.1)':
