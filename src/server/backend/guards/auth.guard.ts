@@ -21,7 +21,15 @@ function extractBearer(ctx: ExecutionContext): string {
 export class AuthGuard implements ICanActivateGuard {
   canActivate(ctx: ExecutionContext): boolean {
     const token = extractBearer(ctx)
-    const decoded = verifyToken(token)
+    let decoded: AuthPayload
+    try {
+      // verifyToken rejects both a bad signature and a well-signed token that is
+      // not a session token (e.g. a download-link token). Either way it is a 401,
+      // not the 500 a raw JsonWebTokenError would classify as.
+      decoded = verifyToken(token)
+    } catch {
+      throw new UnauthorizedError('Not authorized, invalid token')
+    }
     ctx.setAuth(decoded)
     return true
   }
