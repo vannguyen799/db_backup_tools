@@ -5,6 +5,7 @@ import {
   type OnApplicationBootstrap,
   type OnApplicationShutdown,
 } from 'truxie'
+import { BACKUP_MODULE_OPTIONS, type BackupModuleConfig } from '../backup.config'
 import { BackupTargetRepository } from '../domain/backup-target.repository'
 import { BackupRunnerService } from './backup-runner.service'
 import { isDBConnected, onDBConnected } from '~/server/utils/database/connect'
@@ -13,17 +14,27 @@ import { logger } from '~/server/utils/logger'
 const log = logger.getContext('BackupScheduler')
 
 @Injectable()
-@Inject(BackupTargetRepository, BackupRunnerService)
+@Inject(BACKUP_MODULE_OPTIONS, BackupTargetRepository, BackupRunnerService)
 export class BackupSchedulerService implements OnApplicationBootstrap, OnApplicationShutdown {
   private tasks = new Map<string, { cron: string; task: ScheduledTask }>()
   private unsubscribe?: () => void
+  // Reloads are serialized: `create`/`update`/`delete` each trigger one and so does
+  // every DB reconnect. Two running concurrently would both pass the `tasks.has(id)`
+  // check and schedule the same target twice, and the entry the second one overwrote
+  // would keep firing forever, unreachable from stopAll().
+  private reloading: Promise<void> = Promise.resolve()
 
   constructor(
+    private readonly config: BackupModuleConfig,
     private readonly targets: BackupTargetRepository,
     private readonly runner: BackupRunnerService,
   ) {}
 
   onApplicationBootstrap(): void {
+    if (!this.config.schedulerEnabled) {
+      log.info('SCHEDULER_ENABLED=false — no backup cron will be registered')
+      return
+    }
     // Load schedules as soon as the DB is connected — and reload on every
     // reconnect. The MongoDB connection can take longer than the old fixed
     // 5s wait window (Atlas SRV resolution), which previously left cron jobs
@@ -39,7 +50,17 @@ export class BackupSchedulerService implements OnApplicationBootstrap, OnApplica
     this.stopAll()
   }
 
-  async reload(): Promise<void> {
+  reload(): Promise<void> {
+    if (!this.config.schedulerEnabled) return Promise.resolve()
+    const next = this.reloading.then(
+      () => this.reloadOnce(),
+      () => this.reloadOnce(),
+    )
+    this.reloading = next.catch(() => {})
+    return next
+  }
+
+  private async reloadOnce(): Promise<void> {
     const targets = await this.targets.findEnabled().lean()
     const wanted = new Map<string, string>(
       targets.map((t) => [String(t._id), t.cronExpression || '']),

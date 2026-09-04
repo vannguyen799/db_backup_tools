@@ -36,6 +36,7 @@ const moduleImports: Array<Type | DynamicModule> = [
     tmpDir: cfg.backupTmpDir as string,
     mongodumpBin: cfg.mongodumpBin as string,
     pgDumpBin: cfg.pgDumpBin as string,
+    schedulerEnabled: Boolean(cfg.schedulerEnabled),
   }),
   HealthModule,
 ]
