@@ -1,0 +1,52 @@
+name: CI
+
+# The pull-request gate. Thin on purpose: the only check that is genuinely
+# worth a runner here is the one the deploy would fail on anyway.
+#
+# `pnpm typecheck` is NOT run, and that is not an oversight — package.json
+# declares it as `nuxt typecheck`, which needs vue-tsc, and vue-tsc is not a
+# dependency of this repo. In CI that script does not fail cleanly, it tries to
+# INSTALL the missing package non-interactively. A gate that green-lights on an
+# accident is worse than no gate. Add vue-tsc to devDependencies and this
+# becomes a second `- run: pnpm typecheck` line.
+#
+# There is no `pnpm test` line for the same reason: no test script exists yet.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel superseded runs. This is the OPPOSITE of the deploy pipeline's
+# `cancel-in-progress: false`: a half-finished deploy must never be
+# interrupted, but a superseded check run has no side effects.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No `version:` conflict to worry about — package.json pins no
+      # packageManager. Kept in step with the deploy pipeline: a CI that
+      # resolves a different pnpm than the deploy is a CI that can pass while
+      # the deploy fails on the lockfile.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The build IS the check. It compiles every Vue SFC, every truxie
+      # decorator through the esbuild target in nuxt.config.ts, and every
+      # server route — which is the same work the deploy does, so a red build
+      # here is a deploy that would have died after the artifact was packed.
+      - run: pnpm build
