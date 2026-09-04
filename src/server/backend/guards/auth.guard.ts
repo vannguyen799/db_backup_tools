@@ -1,16 +1,15 @@
 import type { ICanActivateGuard, ExecutionContext } from 'truxie'
-import { UnauthorizedError, defineAuth } from 'truxie'
+import { UnauthorizedError, defineAuth, getRequestHeaders } from 'truxie'
 import { verifyToken, type AuthPayload } from '~/server/utils/jwt'
-import type { H3Event } from 'h3'
 
 export type { AuthPayload }
 
 export const Auth = defineAuth<AuthPayload>()
 
+// Headers are read through truxie so the guard works under every adapter: the
+// Nitro dispatcher hands it an H3Event, @truxie/mcp a Web Request.
 function extractBearer(ctx: ExecutionContext): string {
-  const event = ctx.getNativeRequest() as H3Event | undefined
-  const headers = event?.node?.req?.headers ?? {}
-  const authHeader: string = (headers.authorization as string | undefined) ?? ''
+  const authHeader = getRequestHeaders(ctx).authorization ?? ''
   if (!authHeader.startsWith('Bearer ')) {
     throw new UnauthorizedError('Not authorized, no token provided')
   }

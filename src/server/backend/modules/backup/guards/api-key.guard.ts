@@ -1,5 +1,5 @@
 import type { ICanActivateGuard, ExecutionContext } from 'truxie'
-import { UnauthorizedError, defineAuth } from 'truxie'
+import { UnauthorizedError, defineAuth, getRequestHeaders } from 'truxie'
 import type { H3Event } from 'h3'
 import { ApiKey } from '../domain/api-key.model'
 import { hashApiKey } from '~/server/utils/api-key.util'
@@ -13,31 +13,28 @@ export interface ApiKeyContext {
 // Param accessor: `@ApiKeyAuth() key: ApiKeyContext` inside ApiKeyGuard-protected routes.
 export const ApiKeyAuth = defineAuth<ApiKeyContext>()
 
-function getEvent(ctx: ExecutionContext): H3Event | undefined {
-  return ctx.getNativeRequest() as H3Event | undefined
-}
-
-function extractKey(event: H3Event | undefined): string {
-  const headers = event?.node?.req?.headers ?? {}
-  const fromHeader = (headers['x-api-key'] as string | undefined) ?? ''
-  const authHeader = (headers.authorization as string | undefined) ?? ''
+// Headers come through truxie so the guard works under every adapter: the
+// Nitro dispatcher hands it an H3Event, @truxie/mcp a Web Request.
+function extractKey(headers: Record<string, string>): string {
+  const fromHeader = headers['x-api-key'] ?? ''
+  const authHeader = headers.authorization ?? ''
   const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
   const key = (fromHeader || bearer).trim()
   if (!key) throw new UnauthorizedError('Missing API key')
   return key
 }
 
-function clientIp(event: H3Event | undefined): string {
-  const headers = event?.node?.req?.headers ?? {}
-  const xff = (headers['x-forwarded-for'] as string | undefined) ?? ''
+function clientIp(ctx: ExecutionContext, headers: Record<string, string>): string {
+  const xff = headers['x-forwarded-for'] ?? ''
   if (xff) return xff.split(',')[0]?.trim() ?? ''
+  const event = ctx.getNativeRequest() as H3Event | undefined
   return event?.node?.req?.socket?.remoteAddress ?? ''
 }
 
 export class ApiKeyGuard implements ICanActivateGuard {
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
-    const event = getEvent(ctx)
-    const plaintext = extractKey(event)
+    const headers = getRequestHeaders(ctx)
+    const plaintext = extractKey(headers)
     const doc = await ApiKey.findOne({ keyHash: hashApiKey(plaintext) })
 
     if (!doc || !doc.enabled) throw new UnauthorizedError('Invalid API key')
@@ -54,7 +51,7 @@ export class ApiKeyGuard implements ICanActivateGuard {
     // Usage tracking — best-effort, must not block or fail the request.
     ApiKey.updateOne(
       { _id: doc._id },
-      { lastUsedAt: new Date(), lastUsedIp: clientIp(event) },
+      { lastUsedAt: new Date(), lastUsedIp: clientIp(ctx, headers) },
     ).catch(() => {})
 
     return true
