@@ -1,0 +1,322 @@
+name: Build & Deploy (Backup Tools)
+
+# The ZynAlgo fleet pipeline, in the one shape this repository can actually run.
+#
+# Every fleet service deploys through a ~40-line caller of
+# ZynAlgo/ci/.github/workflows/deploy-service-pm2.yml@v1. This repo cannot: that
+# repository is PRIVATE with actions access_level "organization", and
+# vannguyen799/db_backup_tools is a personal-account repo outside the ZynAlgo
+# org. GitHub has no setting that shares an org's private reusable workflow with
+# an outside owner, so the Actions half of the pipeline is inlined here.
+#
+# The HOST half is NOT copied. @zynalgo/deploy-lib is a GitHub PACKAGE, and a
+# package is readable with read:packages from anywhere — so the release swap,
+# the PM2 ecosystem, the health gate, the rollback and the fleet port check are
+# still the fleet's own code, fetched at a pinned version and shipped to the VPS
+# exactly as deploy-service-pm2.yml ships it. What is duplicated here is step
+# ORDER and glue; what would have been dangerous to duplicate is not.
+#
+# Consequences worth knowing before editing:
+#   * a fix in ZynAlgo/ci's lib/ or bin/ reaches this repo on the next
+#     DEPLOY_LIB_VERSION bump below, not automatically;
+#   * a fix to the workflow steps themselves does not reach here at all;
+#   * moving this repo into the ZynAlgo org deletes this file in favour of the
+#     40-line caller. That is the intended end state.
+#
+# Deliberately NOT carried over from the shared workflow:
+#   check-code-change-js  — the emit gate exists so that ONE lockfile edit does
+#                           not rebuild eight monorepo targets. There is one
+#                           target here, and the artifact gate below already
+#                           answers the stronger question (did the built output
+#                           change?), so the emit gate would only add latency.
+#   resolve-runner-label  — the probe picks between the org's self-hosted pool
+#                           and ubuntu-latest. This repo has no self-hosted
+#                           runners and the swap SSHes to prodvps from anywhere,
+#                           so the answer is always ubuntu-latest.
+#
+# The runtime env is owned by env-manager (db-backup-tools/app/production) and
+# arrives as secrets.ENV_FILE, exactly as it does for zynalgo/identity. Nothing
+# is hand-seeded on the host: there was never a shared/.env on the VPS carrying
+# keys tracked nowhere else, because this service is new.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'deploy/targets.json'
+      - 'nuxt.config.ts'
+      - 'tsconfig.json'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-backup-tools.yml'
+      # Prose never ships in an artifact. Negations are order-sensitive — LAST.
+      - '!**/*.md'
+  workflow_dispatch:
+
+concurrency:
+  # NOT cancel-in-progress: a half-finished deploy must never be interrupted.
+  group: deploy-backup-tools-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: Production
+    env:
+      REPO: ${{ github.event.repository.name }}
+      DEPLOY_ENV: prod
+      TARGET_KEY: backup-tools
+      CI_DIR: ${{ github.workspace }}/.ci-shared
+      # EXACT, never a range: this is the library version the steps below were
+      # written against. v1 of the shared workflow pins the same one — the only
+      # commits after it touch lib/release.sh's drizzle toolchain, which this
+      # service (migrations: "none") never reaches.
+      DEPLOY_LIB_VERSION: 1.2.3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── the fleet's own deploy library, as a package ──────────────────────
+      # A PACKAGE, not a checkout of ZynAlgo/ci: checking that private repo out
+      # needs Contents:Read, which a personal repo cannot be granted, whereas
+      # read:packages on a PAT the account already has is enough.
+      # Plain curl because GitHub Packages serves a content-addressed tarball
+      # URL (/download/<pkg>/<ver>/<sha>), not the conventional
+      # /-/<name>-<ver>.tgz, so the URL has to come out of the packument.
+      - name: Fetch the shared deploy library
+        env:
+          TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${TOKEN:?GH_PACKAGES_TOKEN is required — read:packages is enough}"
+          VER="$DEPLOY_LIB_VERSION"
+          mkdir -p "$CI_DIR"
+          META="$(curl -fsSL -H "Authorization: Bearer $TOKEN" https://npm.pkg.github.com/@zynalgo/deploy-lib)" \
+            || { echo "::error::cannot read @zynalgo/deploy-lib — does GH_PACKAGES_TOKEN have read:packages?"; exit 1; }
+          TARBALL="$(printf '%s' "$META" | jq -r --arg v "$VER" '.versions[$v].dist.tarball // empty')"
+          [ -n "$TARBALL" ] || { echo "::error::@zynalgo/deploy-lib@${VER} is not published (have: $(printf '%s' "$META" | jq -r '.versions|keys|join(", ")'))"; exit 1; }
+          curl -fsSL -H "Authorization: Bearer $TOKEN" "$TARBALL" -o "$RUNNER_TEMP/deploy-lib.tgz"
+          tar -xzf "$RUNNER_TEMP/deploy-lib.tgz" --strip-components=1 -C "$CI_DIR"
+          [ -f "$CI_DIR/scripts/artifact-fingerprint.sh" ] || { echo "::error::the package did not contain scripts/"; exit 1; }
+          [ -f "$CI_DIR/deploy/fleet-ports.json" ]         || { echo "::error::the package did not contain deploy/fleet-ports.json"; exit 1; }
+          echo "deploy-lib ${VER}: $(find "$CI_DIR/lib" "$CI_DIR/bin" "$CI_DIR/scripts" -type f | wc -l) files"
+
+      # ── toolchain ────────────────────────────────────────────────────────
+      # A version, not `packageManager`: package.json pins no pnpm, and
+      # pnpm/action-setup refuses both at once. Pinned to the 11 line because
+      # pnpm-workspace.yaml uses minimumReleaseAge / allowBuilds (pnpm 10+) and
+      # the lockfile is v9.0.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the PM2 daemon's runtime on the host (v22.23.1). No
+          # `interpreter` is pinned in the registry, so the release runs on
+          # whatever the daemon runs on — building on a different major is how
+          # a native or syntax mismatch reaches production.
+          node-version: '22'
+          cache: pnpm
+
+      # ── the port/app-name check, run where the data is ───────────────────
+      # Two PM2 apps bound to one port do not fail loudly, they round-robin: the
+      # service appears to drop ~50% of requests for no reason visible in the
+      # code. The allocation ships inside the package fetched above, so this
+      # costs no extra secret and no cross-repo checkout.
+      # NOTE: gh-cicd-backup-tools is not yet registered in ZynAlgo/ci's
+      # fleet-ports.json, so today this WARNS about the unknown app while still
+      # failing hard if 13280 were ever taken by another repo's service.
+      # 13280 is dictated by the cloudflared ingress for backup-1.zynalgo.com,
+      # not chosen — see deploy/targets.json.
+      - name: Fleet allocation gate
+        run: |
+          set -euo pipefail
+          export CI_LIB="$CI_DIR/lib"
+          . "$CI_DIR/lib/common.sh"
+          . "$CI_DIR/lib/target.sh"
+          target_check_fleet deploy/targets.json "$CI_DIR/deploy/fleet-ports.json" "$GITHUB_REPOSITORY"
+
+      # `truxie` and @truxie/* resolve from the public registry here (there is
+      # no .npmrc and no @vannguyen799/* dependency), so the install needs no
+      # token — unlike the fleet repos, where this step carries NODE_AUTH_TOKEN.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # No env reaches this step, and that is the point of the NUXT_ prefix.
+      # nuxt.config.ts bakes runtimeConfig defaults from process.env here, but
+      # every one of them is overridden at RUNTIME by its NUXT_* twin, and
+      # runtimeConfig.public is serialised per-request rather than inlined at
+      # build time. So unlike the storefront — which needs NEXT_PUBLIC_* during
+      # `next build` — this build needs no secret, and none is exposed to it.
+      - name: Build
+        run: pnpm build
+
+      - name: Pack
+        id: pack
+        run: |
+          set -euo pipefail
+          LOCK_HASH="$(sha256sum pnpm-lock.yaml | cut -c1-16)"
+          # ONE list feeds both the tarball and the fingerprint: a path packed
+          # but not fingerprinted lets the gate call a changed release
+          # "identical" and keep stale code serving.
+          # deploy/targets.json travels with the artifact and is fingerprinted
+          # with it, so a port or script change in the registry is a real
+          # artifact change the gate cannot call identical.
+          FILES=".output package.json deploy/targets.json"
+          # shellcheck disable=SC2086
+          tar -czf "$GITHUB_WORKSPACE/app.tar.gz" $FILES
+          # shellcheck disable=SC2086
+          FP="$(bash "$CI_DIR/scripts/artifact-fingerprint.sh" $FILES)"
+          {
+            echo "lock_hash=$LOCK_HASH"
+            echo "fingerprint=$FP"
+            echo "subdir=gh-cicd-deploy/$REPO/$DEPLOY_ENV/$TARGET_KEY"
+            echo "sha=${GITHUB_SHA::8}"
+          } >> "$GITHUB_OUTPUT"
+          echo "app.tar.gz=$(du -h app.tar.gz | cut -f1)  fp=${FP:0:12}"
+
+      # ── the release env, from env-manager ────────────────────────────────
+      # Composed AFTER the build, not before it as in the shared workflow: there
+      # the step exists so Next/Vite can inline NEXT_PUBLIC_*/VITE_* at build
+      # time, and moving it here keeps the secret out of the one step that runs
+      # arbitrary dependency code.
+      # No required-key list is repeated here on purpose. deploy/targets.json
+      # requireEnv is the single declaration, and the host checks it (env_require)
+      # before anything is swapped — a second list on the runner is a list that
+      # drifts from the first.
+      - name: Compose the release env
+        env:
+          ENV_FILE_SECRET: ${{ secrets.ENV_FILE }}
+          ENV_FILE_VARS: ${{ vars.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          : > "$RUNNER_TEMP/release.env"
+          if [ -n "${ENV_FILE_SECRET:-}" ]; then printf '%s\n' "$ENV_FILE_SECRET" >> "$RUNNER_TEMP/release.env"; fi
+          # LAST, so its keys win — dotenv keeps the last occurrence in a file.
+          if [ -n "${ENV_FILE_VARS:-}" ];   then printf '%s\n' "$ENV_FILE_VARS"   >> "$RUNNER_TEMP/release.env"; fi
+          KEYS="$(grep -cE '^[A-Za-z_][A-Za-z0-9_]*=' "$RUNNER_TEMP/release.env" || true)"
+          # Refuse to ship an empty env rather than let the host fall through to
+          # a release that boots on nuxt.config.ts's localhost defaults.
+          [ "$KEYS" -gt 0 ] || { echo "::error::ENV_FILE is empty or unset — has env-manager synced db-backup-tools/app/production yet?"; exit 1; }
+          echo "composed $KEYS key(s)"
+
+      # Key, known_hosts and the mux socket live in $RUNNER_TEMP (wiped per
+      # job), never in ~/.ssh.
+      - name: Setup SSH
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          umask 077
+          printf '%s\n' "$SSH_KEY" > "$RUNNER_TEMP/deploy_key"
+          chmod 600 "$RUNNER_TEMP/deploy_key"
+          ssh-keyscan -p "${SSH_PORT:-22}" "$SSH_HOST" > "$RUNNER_TEMP/known_hosts" 2>/dev/null
+
+      # ── artifact gate ────────────────────────────────────────────────────
+      # `paths:` matches file NAMES; this reasons about the RESULT, the only
+      # thing that can prove a deploy is a no-op. The fingerprint covers the
+      # payload, the swap library (a library bump changes what runs) and the
+      # per-target swap parameters — anything that could make the running
+      # service differ has to be folded in, because a value left OUT is a value
+      # that can change while the gate reports "identical".
+      # The composed env IS folded in, by content hash — only its contribution
+      # to the digest is ever visible, never a per-file hash, so a secret cannot
+      # be confirmed from CI logs. That is what makes an env-manager rotation a
+      # real artifact change: sync the new value, push, and the gate sees a
+      # different release rather than reporting "identical" and leaving the old
+      # value running.
+      # Every ambiguity resolves to deploy: unreachable VPS, no fingerprint yet,
+      # manual dispatch or [deploy] in a commit message.
+      #
+      # CAVEAT, specific to a Nuxt artifact: this gate will report DEPLOY on
+      # every run today, because two tokens in .output are freshly random per
+      # build — nitro.json's `date` (new Date().toJSON()) and Nuxt's `buildId`,
+      # whose 4.3.1 default is randomUUID(). The storefront hits the same class
+      # of problem with Next's BUILD_ID and normalises it away, but that
+      # mechanism (FP_NORMALIZE) takes ONE literal token, not two. Making the
+      # gate effective here means pinning `app.buildId` in nuxt.config.ts and
+      # dropping the build metadata — an application change for CI's benefit,
+      # so it is deliberately NOT done behind your back. Until then the gate
+      # earns its place by recording .artifact-fingerprint and by keeping the
+      # fail-safe path, not by skipping: the probe rides the ControlPersist
+      # connection the swap reuses, so it costs no extra round trip.
+      - name: Artifact gate
+        id: live
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          SUBDIR: ${{ steps.pack.outputs.subdir }}
+          PAYLOAD_FP: ${{ steps.pack.outputs.fingerprint }}
+          LOCK_HASH: ${{ steps.pack.outputs.lock_hash }}
+          FORCE: ${{ github.event_name != 'push' || contains(join(github.event.commits.*.message, ' '), '[deploy]') }}
+        run: |
+          set -euo pipefail
+          FP="$(
+            FP_EXTRA="$(printf 'payload=%s\ntarget=%s\nlock=%s\nenv_source=ci_file\n' \
+                        "$PAYLOAD_FP" "$TARGET_KEY" "$LOCK_HASH")" \
+            FP_ENV_FILE="$RUNNER_TEMP/release.env" \
+            bash "$CI_DIR/scripts/artifact-fingerprint.sh" .ci-shared/lib .ci-shared/bin
+          )"
+          echo "fingerprint=$FP" >> "$GITHUB_OUTPUT"
+          echo "artifact fingerprint: $FP"
+
+          decide() {   # <identical> <reason>
+            echo "identical=$1" >> "$GITHUB_OUTPUT"
+            local head
+            if [ "$1" = 'true' ]; then head="SKIP — $2"; else head="DEPLOY — $2"; fi
+            echo "$head"
+            if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then echo "### $head" >> "$GITHUB_STEP_SUMMARY"; fi
+            exit 0
+          }
+
+          if [ "$FORCE" = 'true' ]; then decide false 'gate forced off (manual dispatch or [deploy] override)'; fi
+
+          # ControlPersist means the Upload & swap step REUSES this connection,
+          # so the probe is ~free.
+          SSHOPTS="-i $RUNNER_TEMP/deploy_key -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts -o Port=$SSH_PORT -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ControlMaster=auto -o ControlPath=$RUNNER_TEMP/cm -o ControlPersist=180"
+          SSH="ssh $SSHOPTS $SSH_USER@$SSH_HOST"
+
+          REMOTE_HOME=''
+          for _ in 1 2 3; do
+            if REMOTE_HOME="$($SSH 'echo $HOME' 2>/dev/null)" && [ -n "$REMOTE_HOME" ]; then break; fi
+            REMOTE_HOME=''
+            sleep 5
+          done
+          [ -n "$REMOTE_HOME" ] || decide false 'could not reach the VPS to read the live fingerprint'
+
+          BASE="$REMOTE_HOME/$SUBDIR"
+          LIVE="$($SSH "cat '$BASE/current/.artifact-fingerprint' 2>/dev/null" 2>/dev/null || true)"
+          LIVE="$(printf '%s' "$LIVE" | tr -d '[:space:]')"
+
+          [ -n "$LIVE" ]     || decide false "no fingerprint on the VPS yet ($BASE) — deploying and recording one"
+          [ "$LIVE" = "$FP" ] || decide false "artifact changed (live ${LIVE:0:12}… -> new ${FP:0:12}…)"
+          decide true "the VPS already serves this exact artifact (${FP:0:12}…) — no upload, no swap, no pm2 reload"
+
+      # Uploads the artifact, the deploy library and the registry, then runs
+      # release-swap-pm2.sh on the host. The swap DETACHES itself, so a
+      # cancelled CI job can never leave a half-applied deploy; a failed health
+      # check rolls back to the previous release.
+      - name: Upload & swap
+        if: steps.live.outputs.identical != 'true'
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          SUBDIR: ${{ steps.pack.outputs.subdir }}
+          SHA: ${{ steps.pack.outputs.sha }}
+          LOCK_HASH: ${{ steps.pack.outputs.lock_hash }}
+          FINGERPRINT: ${{ steps.live.outputs.fingerprint }}
+          # ci_file: upload-and-swap.sh scp's $RUNNER_TEMP/release.env to
+          # shared/.env.staged, and the host consumes AND DELETES it, so a later
+          # run can never pick up a stale one. env-manager is the source of
+          # truth; the host holds a copy, not the original.
+          ENV_SOURCE: ci_file
+        run: bash "$CI_DIR/scripts/upload-and-swap.sh"

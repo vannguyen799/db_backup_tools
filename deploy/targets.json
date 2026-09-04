@@ -1,0 +1,39 @@
+{
+  "_comment": "vannguyen799/db_backup_tools — deploy/targets.json. Same registry format ZynAlgo/ci reads, because the HOST half of the pipeline is that library verbatim: the deploy ships @zynalgo/deploy-lib to the VPS and runs its release-swap-pm2.sh, which resolves every field below. Only the GitHub-Actions half is a local copy, and only because ZynAlgo/ci is org-private and this repo is not in the org. The prod port is 13280 and it is NOT a free choice: cloudflared already terminates backup-1.zynalgo.com at http://127.0.0.1:13280 in /etc/cloudflared/config.yml on the VPS, so the registry has to agree with the tunnel or the hostname 502s while PM2 reports a healthy app on some other port. That puts it outside the fleet scheme (prod 40000+N*100) — as tracking-aff, hrm, tele-ref-bot and zyndash already are — and it happens to match the app's own dev port, which is why the tunnel was pointed there. Verified free on the VPS before claiming it. The preview port stays in the 25000 band because no preview hostname exists to constrain it. The runtime env is owned by env-manager (db-backup-tools/app/production) and reaches the host as secrets.ENV_FILE, so nothing here is hand-seeded; requireEnv below is the ONE declaration of what the release cannot boot without, checked on the host before anything is swapped. The app names are NOT yet in ZynAlgo/ci deploy/fleet-ports.json — the fleet gate therefore warns rather than protecting them, and registering them there is a follow-up.",
+  "defaults": {
+    "host": "127.0.0.1",
+    "instances": 1,
+    "execMode": "fork",
+    "waitReady": false,
+    "listenTimeout": 60000,
+    "killTimeout": 30000,
+    "healthPath": "/api/health",
+    "healthExpect": "\"db\":\"connected\"",
+    "memoryProfile": "light",
+    "migrations": "none",
+    "keep": 5
+  },
+  "targets": {
+    "backup-tools": {
+      "_comment": "Nuxt 4 / Nitro node-server. `nuxt build` traces every runtime dependency into .output/server/node_modules as real files, so the artifact is self-contained and nmMode stays at its \"none\" default — nothing but .output and package.json is ever uploaded. THREE settings here are coupled to how Nuxt actually boots and none of them is the fleet default: (1) execMode is `fork`, not `cluster` — PM2's cluster mode forks from the daemon's own runtime and ignores node_args, which would silently drop the --env-file below, and this service runs @truxie/schedule cron jobs that must not exist in more than one process. (2) waitReady is false — the Nitro runtime never calls process.send('ready'), so waiting for it burns listenTimeout and then fails a release that is actually serving; the HTTP health poll is the real gate. (3) nodeArgs carries --env-file=.env because .output/server/index.mjs does NOT read a .env of its own (Nitro loads dotenv in dev only) — package.json's `start` script has always passed that flag, and PM2 has to pass it too. release-swap symlinks shared/.env into the release root, which is the process cwd, so the relative path resolves. requireEnv names are NUXT_-prefixed on purpose: nuxt.config.ts reads process.env at BUILD time, so the values baked on the runner are the localhost defaults, and at runtime only NUXT_* overrides them (mongodbUri <- NUXT_MONGODB_URI, public.appUrl <- NUXT_PUBLIC_APP_URL). An unprefixed MONGODB_URI in shared/.env does nothing at all. NUXT_GOOGLE_REDIRECT_URI is required for the same reason the storefront requires REVALIDATE_TOKEN: its default is interpolated from APP_URL at build time, so leaving it unset ships a redirect pointing at http://localhost:13280 and every Drive link silently fails against a service that looks healthy.",
+      "app": "gh-cicd-backup-tools",
+      "port": 13280,
+      "script": ".output/server/index.mjs",
+      "nodeArgs": "--env-file=.env",
+      "requireEnv": [
+        "NUXT_MONGODB_URI",
+        "NUXT_JWT_SECRET",
+        "NUXT_ENCRYPTION_KEY",
+        "NUXT_ADMIN_PASSWORD",
+        "NUXT_PUBLIC_APP_URL",
+        "NUXT_GOOGLE_REDIRECT_URI"
+      ]
+    },
+    "backup-tools-preview": {
+      "_comment": "No preview branch exists yet. The entry is here because the deploy resolves `<service>-preview` for a push to `preview` and would fail on a missing key; its own database, because a preview must never dump or restore against production targets.",
+      "extends": "backup-tools",
+      "app": "gh-cicd-backup-tools-preview",
+      "port": 25700
+    }
+  }
+}
