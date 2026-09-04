@@ -4,6 +4,7 @@ import { BackupTargetRepository } from '../domain/backup-target.repository'
 import { BackupSchedulerService } from './backup-scheduler.service'
 import { encryptString, decryptString } from '~/server/utils/crypto'
 import { getMachineId, isLocalDbUri } from '~/server/utils/machine-id'
+import { isObjectId } from '~/server/utils/object-id'
 
 function normalizeCollectionFilter(input?: CollectionFilterInput) {
   const mode: 'exclude' | 'include' = input?.mode === 'include' ? 'include' : 'exclude'
@@ -65,6 +66,7 @@ export class BackupTargetsService {
   }
 
   async findById(id: string) {
+    if (!isObjectId(id)) throw new NotFoundError('Target not found')
     const t = await this.repo.findByIdSafe(id)
     if (!t) throw new NotFoundError('Target not found')
     const currentMachineId = getMachineId()
@@ -77,6 +79,7 @@ export class BackupTargetsService {
   }
 
   async getMongoUri(id: string) {
+    if (!isObjectId(id)) throw new NotFoundError('Target not found')
     const t = await this.repo.findById(id)
     if (!t) throw new NotFoundError('Target not found')
     return { mongoUri: decryptString(t.mongoUriEncrypted) }
@@ -116,6 +119,7 @@ export class BackupTargetsService {
   }
 
   async update(id: string, input: UpdateTargetInput) {
+    if (!isObjectId(id)) throw new NotFoundError('Target not found')
     const patch: Record<string, unknown> = {}
     if (typeof input.name === 'string') patch.name = input.name.trim()
     if (typeof input.description === 'string') patch.description = input.description
@@ -160,6 +164,7 @@ export class BackupTargetsService {
   }
 
   async delete(id: string) {
+    if (!isObjectId(id)) throw new NotFoundError('Target not found')
     const res = await this.repo.delete(id)
     if (!res) throw new NotFoundError('Target not found')
     await this.scheduler.reload()

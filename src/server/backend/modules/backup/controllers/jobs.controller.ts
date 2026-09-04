@@ -7,6 +7,7 @@ import { BackupTargetRepository } from '../domain/backup-target.repository'
 import { BackupSchedulerService } from '../services/backup-scheduler.service'
 import { GoogleDriveService } from '$/modules/gdrive/services/gdrive.service'
 import { signDownloadToken, verifyDownloadToken } from '~/server/utils/jwt'
+import { isObjectId } from '~/server/utils/object-id'
 import { sendSuccess } from '~/server/utils/response'
 
 const Event = createParamDecorator<H3Event>((ctx) => ctx.getNativeRequest() as H3Event)
@@ -80,6 +81,7 @@ export class JobsController {
     related: ['GET /api/jobs'],
   })
   async get(@Param('id') id: string) {
+    if (!isObjectId(id)) throw new NotFoundError('Job not found')
     const job = await this.jobs.findById(id)
     if (!job) throw new NotFoundError('Job not found')
     return sendSuccess(job)
@@ -87,6 +89,7 @@ export class JobsController {
 
   @Post('/:id/download-url')
   async downloadUrl(@Param('id') id: string) {
+    if (!isObjectId(id)) throw new NotFoundError('Job not found')
     const job = await this.jobs.findById(id)
     if (!job) throw new NotFoundError('Job not found')
     if (!job.gdriveFileId) throw new AppError('Job has no archive on Google Drive', 400)

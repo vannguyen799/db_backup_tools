@@ -2,6 +2,7 @@ import { Injectable, Inject, AppError, NotFoundError } from 'truxie'
 import { ApiKeyRepository } from '../domain/api-key.repository'
 import { BackupTargetRepository } from '../domain/backup-target.repository'
 import { generateApiKey } from '~/server/utils/api-key.util'
+import { isObjectId } from '~/server/utils/object-id'
 
 export interface CreateApiKeyInput {
   name: string
@@ -29,6 +30,7 @@ export class ApiKeyService {
   async create(input: CreateApiKeyInput, createdBy?: string) {
     if (!input.name || !input.name.trim()) throw new AppError('name is required', 400)
     if (!input.targetId) throw new AppError('targetId is required', 400)
+    if (!isObjectId(input.targetId)) throw new NotFoundError('Target not found')
 
     const target = await this.targets.findById(input.targetId)
     if (!target) throw new NotFoundError('Target not found')
@@ -66,6 +68,7 @@ export class ApiKeyService {
   }
 
   async revoke(id: string) {
+    if (!isObjectId(id)) throw new NotFoundError('API key not found')
     const res = await this.repo.delete(id)
     if (!res) throw new NotFoundError('API key not found')
     return { id }
