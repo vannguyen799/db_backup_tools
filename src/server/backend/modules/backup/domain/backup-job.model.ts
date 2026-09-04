@@ -20,6 +20,11 @@ const backupJobSchema = new Schema(
     finishedAt: { type: Date },
     durationMs: { type: Number },
 
+    // Refreshed periodically while the dump is in flight. A `running` job whose
+    // heartbeat has gone stale belongs to a process that died mid-backup, which is
+    // how a restart-orphaned job is told apart from one that is genuinely running.
+    lastHeartbeatAt: { type: Date },
+
     archiveFilename: { type: String },
     archiveSizeBytes: { type: Number },
 
