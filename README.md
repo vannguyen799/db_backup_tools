@@ -112,6 +112,7 @@ src/
 | POST | `/api/sync/:id` | 🔑 | Trigger target `:id` (must match the key) → `{jobId}` |
 | GET | `/api/sync/job/:jobId` | 🔑 | Poll job status (own target only) |
 | GET | `/api/health` | – | Health probe |
+| POST | `/mcp` | ✓ | MCP endpoint for agents — see [MCP endpoint](#mcp-endpoint-claude-code-and-other-agents) |
 
 Auth legend: **✓** = session JWT (`Authorization: Bearer <jwt>`), **🔑** = API key (`X-API-Key: <key>` or `Authorization: Bearer <key>`), **–** = public.
 
@@ -148,6 +149,69 @@ External systems trigger a backup with an API key instead of a user session. A k
 ```bash
 curl -fsS -X POST "$BK_HOST/api/sync" -H "X-API-Key: $BK_KEY"
 ```
+
+## MCP endpoint (Claude Code and other agents)
+
+`POST /mcp` exposes part of this API to an MCP client through [`@truxie/mcp`](https://www.npmjs.com/package/@truxie/mcp). The
+client gets **four generic tools** rather than one per route — `list_endpoints`,
+`describe_endpoint`, `call_endpoint`, `whoami` — so the catalog is data the model
+fetches when it needs it instead of a permanent tax on its context window.
+
+Calls are dispatched in-process through the application's own guard chain
+(`matchRoute → guards → pipes → interceptors → handler → filters`). A guard cannot
+tell the call arrived over MCP, so nothing is bypassed by using it.
+
+**Auth** — the same dashboard JWT the HTTP API takes:
+
+```bash
+TOKEN=$(curl -fsS -X POST http://localhost:13280/api/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"email":"admin@local","password":"…"}' | jq -r .data.token)
+```
+
+**Connect Claude Code** — the repo ships a `.mcp.json`; export the token (and the
+host, if it is not localhost) and Claude Code picks it up:
+
+```bash
+export BACKUP_TOOLS_TOKEN="$TOKEN"
+export BACKUP_TOOLS_MCP_URL="https://backup.example.com/mcp"   # optional
+```
+
+Or register it globally, without the repo file:
+
+```bash
+claude mcp add --transport http backup-tools https://backup.example.com/mcp \
+  --header "Authorization: Bearer $TOKEN"
+```
+
+Set `MCP_ENABLED=false` to remove the endpoint entirely — it answers 404 then.
+
+### What is exposed
+
+Exposure is opt-in per route, declared with `@McpExpose()` on the controller
+method. 14 endpoints are exposed today:
+
+| Exposed | Notes |
+|---------|-------|
+| `GET /api/health`, `GET /api/auth/me` | Liveness and the acting account |
+| `GET /api/targets`, `GET /api/targets/:id` | Target metadata; connection URIs never included |
+| `POST /api/targets`, `PATCH /api/targets/:id` | Create and update, with a hand-written body schema in the catalog |
+| `POST /api/targets/probe-collections` | Reads the source's databases/collections; changes nothing |
+| `POST /api/targets/:id/run` | **dangerous** — `call_endpoint` refuses it until the caller passes `confirm: true` |
+| `GET /api/jobs`, `/recent`, `/stats`, `/:id` | Job history and scheduler state |
+| `GET /api/gdrive/status`, `/accounts` | Drive connection and account ids |
+
+Deliberately **not** exposed, and the reasons matter more than the list:
+
+- `GET /api/targets/:id/uri` — returns the decrypted connection URI, credentials and all.
+- `DELETE /api/targets/:id`, `DELETE /api/gdrive/accounts/:id` — destructive, left to the dashboard.
+- `POST /api/auth/login`, `POST /api/auth/change-password` — an agent should not be trading credentials for tokens.
+- `POST /api/jobs/:id/download-url`, `GET /api/jobs/:id/download` — hands out the backup archive itself.
+- `/api/api-keys/*` and `/api/sync/*` — key management, and the machine-facing trigger that has its own API-key auth.
+
+Adding a route to the catalog is one decorator; a route without it is invisible
+and uncallable, so a controller added next month is not reachable by an agent
+until someone says it is.
 
 ## Restoring a backup
 
