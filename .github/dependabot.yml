@@ -1,0 +1,70 @@
+version: 2
+
+# Same policy as the fleet repos, minus the parts that only apply there: this
+# repo has no @vannguyen799/* dependency and no .npmrc, so `truxie` and
+# @truxie/* resolve from the public registry and no `registries:` block or
+# DEPENDABOT_PACKAGES_TOKEN is needed.
+#
+# The deploy workflow references NO private reusable workflow either (that is
+# the whole reason it is inlined), so the `github_actions` updates below cannot
+# hit the `git_dependencies_not_reachable` failure that blocked the fleet repos
+# until ZynAlgo/ci was granted Dependabot private-repository access.
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # One PR per group, not per package: truxie and its adapters move together,
+    # and a five-PR trickle for what is really one upgrade is how dependency
+    # PRs start getting ignored.
+    groups:
+      truxie:
+        patterns:
+          - truxie
+          - '@truxie/*'
+      backup-runtime:
+        patterns:
+          - mongoose
+          - pg
+          - googleapis
+          - google-auth-library
+          - node-cron
+          - jsonwebtoken
+          - bcryptjs
+      frontend:
+        patterns:
+          - nuxt
+          - vue
+          - vue-router
+          - pinia
+          - '@pinia/*'
+          - tailwindcss
+          - '@tailwindcss/*'
+      dev-tooling:
+        dependency-type: development
+    ignore:
+      # Majors are architectural decisions, not a PR to rubber-stamp: they land
+      # deliberately, with the migration, not on a Monday morning.
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ['*']
+    ignore:
+      # The rule the fleet learned the hard way on 2026-07-29: one grouped PR
+      # carried actions/checkout v4->v7 and every pipeline went red until the
+      # revert, because a deploy that dies at Checkout ships nothing while
+      # reporting nothing. The deploy workflow only runs on push to main, so a
+      # major here CANNOT be exercised by the PR proposing it. Patch and minor
+      # bumps still arrive monthly.
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
