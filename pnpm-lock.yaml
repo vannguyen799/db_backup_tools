@@ -21,8 +21,8 @@ importers:
         specifier: 0.1.1
         version: 0.1.1(@truxie/jwt@0.1.1(truxie@0.1.1))(@truxie/rbac@0.1.1(truxie@0.1.1))(truxie@0.1.1)
       '@truxie/nitro':
-        specifier: 0.1.1
-        version: 0.1.1(h3@1.15.11)(truxie@0.1.1)
+        specifier: 0.1.2
+        version: 0.1.2(h3@1.15.11)(truxie@0.1.1)
       '@truxie/rbac':
         specifier: 0.1.1
         version: 0.1.1(truxie@0.1.1)
@@ -1542,8 +1542,8 @@ packages:
       '@truxie/rbac': ^0.1.1
       truxie: ^0.1.1
 
-  '@truxie/nitro@0.1.1':
-    resolution: {integrity: sha512-rxDUU8haeHKKs4mfv/aUD9wGKW9p4h+opqd6nser+ZIEM2TuWAXqEENErMujy0v6fZ9CtMebX/Dhj0fueTfxMQ==}
+  '@truxie/nitro@0.1.2':
+    resolution: {integrity: sha512-8+AmsuQlCK+ABM3YKeh2zAZ8Skn0VuNLEUEU9/BPBc1oF0oxmEjKo9b5uTk10FBIWlSC44eotrimg+Un/joubA==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       h3: '>=1.0.0'
@@ -5442,7 +5442,7 @@ snapshots:
       '@truxie/rbac': 0.1.1(truxie@0.1.1)
       truxie: 0.1.1
 
-  '@truxie/nitro@0.1.1(h3@1.15.11)(truxie@0.1.1)':
+  '@truxie/nitro@0.1.2(h3@1.15.11)(truxie@0.1.1)':
     dependencies:
       h3: 1.15.11
       truxie: 0.1.1

@@ -22,7 +22,7 @@
     "@tailwindcss/postcss": "^4.2.0",
     "@truxie/jwt": "0.1.1",
     "@truxie/mcp": "0.1.1",
-    "@truxie/nitro": "0.1.1",
+    "@truxie/nitro": "0.1.2",
     "@truxie/rbac": "0.1.1",
     "@truxie/schedule": "0.1.1",
     "bcryptjs": "^3.0.3",
