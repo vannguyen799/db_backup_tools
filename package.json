@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@pinia/nuxt": "^0.11.3",
-    "@tailwindcss/postcss": "^4.2.0",
+    "@tailwindcss/postcss": "^4.3.3",
     "@truxie/jwt": "0.1.1",
     "@truxie/mcp": "0.1.1",
     "@truxie/nitro": "0.1.2",
@@ -32,13 +32,13 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.2.2",
     "node-cron": "^3.0.3",
-    "nuxt": "4.3.1",
+    "nuxt": "4.5.2",
     "pg": "^8.21.0",
     "pinia": "^2.3.0",
     "reflect-metadata": "^0.2.2",
-    "tailwindcss": "^4.2.0",
+    "tailwindcss": "^4.3.3",
     "truxie": "0.1.1",
-    "vue": "^3.5.0",
+    "vue": "^3.5.42",
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
