@@ -169,6 +169,11 @@ TOKEN=$(curl -fsS -X POST http://localhost:13280/api/auth/login \
   -d '{"email":"admin@local","password":"…"}' | jq -r .data.token)
 ```
 
+The dashboard has a guided version of everything below at **MCP Connection**
+(`/mcp-connect`): it shows the endpoint, your current token, ready-made config for
+Claude Code / Claude Desktop / Cursor / VS Code, and a **Test connection** button
+that runs a real `tools/list` against `/mcp` and prints the catalog you get back.
+
 **Connect Claude Code** — the repo ships a `.mcp.json`; export the token (and the
 host, if it is not localhost) and Claude Code picks it up:
 
