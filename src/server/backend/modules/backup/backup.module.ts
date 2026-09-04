@@ -8,6 +8,7 @@ import { BackupSchedulerService } from './services/backup-scheduler.service'
 import { BackupTargetsService } from './services/backup-targets.service'
 import { SourceProbeService } from './services/source-probe.service'
 import { ApiKeyService } from './services/api-key.service'
+import { ApiKeyGuard } from './guards/api-key.guard'
 import { TargetsController } from './controllers/targets.controller'
 import { JobsController } from './controllers/jobs.controller'
 import { ApiKeyController } from './controllers/api-key.controller'
@@ -32,6 +33,9 @@ export class BackupModule {
         BackupTargetsService,
         SourceProbeService,
         ApiKeyService,
+        // Registered so truxie resolves it through the container — the guard has a
+        // constructor dependency and cannot be `new`-ed by the route pipeline.
+        ApiKeyGuard,
       ],
       exports: [BackupRunnerService, BackupSchedulerService],
     }

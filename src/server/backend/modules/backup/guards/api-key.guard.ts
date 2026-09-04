@@ -1,13 +1,28 @@
 import type { ICanActivateGuard, ExecutionContext } from 'truxie'
-import { UnauthorizedError, defineAuth, getRequestHeaders } from 'truxie'
+import { Injectable, Inject, UnauthorizedError, ForbiddenError, defineAuth, getRequestHeaders } from 'truxie'
 import type { H3Event } from 'h3'
-import { ApiKey } from '../domain/api-key.model'
-import { hashApiKey } from '~/server/utils/api-key.util'
+import { ApiKeyRepository } from '../domain/api-key.repository'
 
 export interface ApiKeyContext {
   keyId: string
   targetId: string
   scopes: string[]
+}
+
+// Scopes a key can carry. `sync:run` implies `sync:read` — a key allowed to start a
+// backup may always read back the job it started.
+export const SCOPE_RUN = 'sync:run'
+export const SCOPE_READ = 'sync:read'
+
+/**
+ * Enforce that the calling key carries one of `allowed`. Scopes are stored per key
+ * and surfaced in the UI, so they have to actually gate something.
+ */
+export function assertScope(key: ApiKeyContext, ...allowed: string[]): void {
+  const scopes = key.scopes || []
+  if (!allowed.some((s) => scopes.includes(s))) {
+    throw new ForbiddenError(`API key lacks the required scope (${allowed.join(' or ')})`)
+  }
 }
 
 // Param accessor: `@ApiKeyAuth() key: ApiKeyContext` inside ApiKeyGuard-protected routes.
@@ -31,11 +46,15 @@ function clientIp(ctx: ExecutionContext, headers: Record<string, string>): strin
   return event?.node?.req?.socket?.remoteAddress ?? ''
 }
 
+@Injectable()
+@Inject(ApiKeyRepository)
 export class ApiKeyGuard implements ICanActivateGuard {
+  constructor(private readonly keys: ApiKeyRepository) {}
+
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const headers = getRequestHeaders(ctx)
     const plaintext = extractKey(headers)
-    const doc = await ApiKey.findOne({ keyHash: hashApiKey(plaintext) })
+    const doc = await this.keys.findByPlaintext(plaintext)
 
     if (!doc || !doc.enabled) throw new UnauthorizedError('Invalid API key')
     if (doc.expiresAt && doc.expiresAt.getTime() < Date.now()) {
@@ -49,10 +68,7 @@ export class ApiKeyGuard implements ICanActivateGuard {
     } satisfies ApiKeyContext)
 
     // Usage tracking — best-effort, must not block or fail the request.
-    ApiKey.updateOne(
-      { _id: doc._id },
-      { lastUsedAt: new Date(), lastUsedIp: clientIp(ctx, headers) },
-    ).catch(() => {})
+    this.keys.touch(String(doc._id), clientIp(ctx, headers)).catch(() => {})
 
     return true
   }

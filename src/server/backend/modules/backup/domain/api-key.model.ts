@@ -25,8 +25,6 @@ const apiKeySchema = new Schema(
   { timestamps: true },
 )
 
-apiKeySchema.index({ keyHash: 1 }, { unique: true })
-
 export type IApiKey = InferSchemaType<typeof apiKeySchema> & {
   _id: mongoose.Types.ObjectId
 }

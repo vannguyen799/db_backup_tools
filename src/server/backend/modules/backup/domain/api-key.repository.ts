@@ -1,5 +1,6 @@
 import { Injectable } from 'truxie'
 import { ApiKey, type IApiKey } from './api-key.model'
+import { hashApiKey } from '~/server/utils/api-key.util'
 
 @Injectable()
 export class ApiKeyRepository {
@@ -10,6 +11,11 @@ export class ApiKeyRepository {
 
   findByHash(keyHash: string) {
     return ApiKey.findOne({ keyHash })
+  }
+
+  /** Look a key up by the plaintext the caller presented; only the hash is stored. */
+  findByPlaintext(plaintext: string) {
+    return this.findByHash(hashApiKey(plaintext))
   }
 
   create(input: Partial<IApiKey>) {
