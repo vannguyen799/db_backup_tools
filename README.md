@@ -194,14 +194,13 @@ Set `MCP_ENABLED=false` to remove the endpoint entirely — it answers 404 then.
 ### What is exposed
 
 Exposure is opt-in per route, declared with `@McpExpose()` on the controller
-method. 14 endpoints are exposed today:
+method. 13 endpoints are exposed today:
 
 | Exposed | Notes |
 |---------|-------|
 | `GET /api/health`, `GET /api/auth/me` | Liveness and the acting account |
 | `GET /api/targets`, `GET /api/targets/:id` | Target metadata; connection URIs never included |
 | `POST /api/targets`, `PATCH /api/targets/:id` | Create and update, with a hand-written body schema in the catalog |
-| `POST /api/targets/probe-collections` | Reads the source's databases/collections; changes nothing |
 | `POST /api/targets/:id/run` | **dangerous** — `call_endpoint` refuses it until the caller passes `confirm: true` |
 | `GET /api/jobs`, `/recent`, `/stats`, `/:id` | Job history and scheduler state |
 | `GET /api/gdrive/status`, `/accounts` | Drive connection and account ids |
@@ -213,6 +212,7 @@ Deliberately **not** exposed, and the reasons matter more than the list:
 - `POST /api/auth/login`, `POST /api/auth/change-password` — an agent should not be trading credentials for tokens.
 - `POST /api/jobs/:id/download-url`, `GET /api/jobs/:id/download` — hands out the backup archive itself.
 - `/api/api-keys/*` and `/api/sync/*` — key management, and the machine-facing trigger that has its own API-key auth.
+- `POST /api/targets/probe-collections` — `@McpHidden`: it connects to a caller-supplied URI (SSRF-style); the dashboard still uses it over HTTP.
 
 Adding a route to the catalog is one decorator; a route without it is invisible
 and uncallable, so a controller added next month is not reachable by an agent

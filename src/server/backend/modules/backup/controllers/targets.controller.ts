@@ -1,5 +1,5 @@
 import { Inject, Controller, Get, Post, Patch, Delete, RouteGuards, Body, Param } from 'truxie'
-import { McpExpose } from '@truxie/mcp'
+import { McpExpose, McpHidden } from '@truxie/mcp'
 import { AuthGuard } from '$/guards/auth.guard'
 import {
   BackupTargetsService,
@@ -87,7 +87,7 @@ export class TargetsController {
         enabled: { type: 'boolean', default: true },
       },
     },
-    related: ['GET /api/gdrive/accounts', 'POST /api/targets/probe-collections'],
+    related: ['GET /api/gdrive/accounts'],
   })
   async create(@Body() body: CreateTargetInput) {
     return sendSuccess(await this.targets.create(body), 'Target created')
@@ -165,24 +165,7 @@ export class TargetsController {
   }
 
   @Post('/probe-collections')
-  @McpExpose({
-    summary: 'List the databases and collections/tables a source URI can see. Reads only, changes nothing.',
-    description:
-      'Pass `targetId` to probe a saved target with its stored URI, or `mongoUri` to probe a connection string directly. Use it to fill `collectionFilter` before creating or updating a target.',
-    tags: ['targets'],
-    write: true,
-    idempotent: true,
-    sideEffects: ['opens a connection to the source database'],
-    bodySchema: {
-      type: 'object',
-      properties: {
-        targetId: { type: 'string', description: 'Probe this saved target using its stored URI.' },
-        mongoUri: { type: 'string', description: 'Probe this connection string instead.' },
-        databaseType: { type: 'string', enum: ['mongodb', 'postgresql'], default: 'mongodb' },
-      },
-    },
-    related: ['POST /api/targets', 'PATCH /api/targets/:id'],
-  })
+  @McpHidden('connects to a caller-supplied URI')
   async probeCollections(
     @Body() body: { mongoUri?: string; targetId?: string; databaseType?: 'mongodb' | 'postgresql' },
   ) {
