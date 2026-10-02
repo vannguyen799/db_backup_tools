@@ -5,6 +5,8 @@ export interface AuthPayload {
   id: string
   email: string
   role: 'admin'
+  /** Set by AuthGuard (never signed into the token): 'mcp' when the call arrived over @truxie/mcp. */
+  via?: 'mcp'
 }
 
 export function signToken(payload: AuthPayload): string {

@@ -1,6 +1,6 @@
 import { Inject, Controller, Get, Post, Patch, Delete, RouteGuards, Body, Param } from 'truxie'
 import { McpExpose, McpHidden } from '@truxie/mcp'
-import { AuthGuard } from '$/guards/auth.guard'
+import { AuthGuard, Auth, type AuthPayload } from '$/guards/auth.guard'
 import {
   BackupTargetsService,
   type CreateTargetInput,
@@ -155,10 +155,13 @@ export class TargetsController {
     cost: 'expensive',
     related: ['GET /api/jobs', 'GET /api/jobs/:id'],
   })
-  async run(@Param('id') id: string) {
+  async run(@Param('id') id: string, @Auth() auth: AuthPayload) {
     // Pre-flight: ensure target exists (throws NotFound if missing)
     const target = await this.targets.findById(id)
-    this.runner.run(id, 'manual', 'Manual run (dashboard)').catch((err) => {
+    // Same 'manual' trigger either way (enum + dashboard badge unchanged); the
+    // reason records the MCP origin and the caller.
+    const reason = auth.via === 'mcp' ? `Manual run (MCP: ${auth.email})` : 'Manual run (dashboard)'
+    this.runner.run(id, 'manual', reason).catch((err) => {
       log.error(`Manual backup ${target.name} failed:`, (err as Error).message)
     })
     return sendSuccess({ targetId: id }, 'Backup started')

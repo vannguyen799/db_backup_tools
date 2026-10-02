@@ -1,4 +1,5 @@
 import type { ICanActivateGuard, ExecutionContext } from 'truxie'
+import { McpExecutionContext } from '@truxie/mcp'
 import { UnauthorizedError, defineAuth, getRequestHeaders } from 'truxie'
 import { verifyToken, type AuthPayload } from '~/server/utils/jwt'
 
@@ -30,7 +31,9 @@ export class AuthGuard implements ICanActivateGuard {
     } catch {
       throw new UnauthorizedError('Not authorized, invalid token')
     }
-    ctx.setAuth(decoded)
+    // Strip any `via` a token might carry; only the transport may set it.
+    const { via: _ignored, ...claims } = decoded
+    ctx.setAuth(ctx instanceof McpExecutionContext ? { ...claims, via: 'mcp' as const } : claims)
     return true
   }
 }
