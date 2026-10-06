@@ -175,7 +175,7 @@ jobs:
           {
             echo "lock_hash=$LOCK_HASH"
             echo "fingerprint=$FP"
-            echo "subdir=gh-cicd-deploy/$REPO/$DEPLOY_ENV/$TARGET_KEY"
+            echo "subdir=.gh-cicd-deploy/$REPO/$DEPLOY_ENV/$TARGET_KEY"
             echo "sha=${GITHUB_SHA::8}"
           } >> "$GITHUB_OUTPUT"
           echo "app.tar.gz=$(du -h app.tar.gz | cut -f1)  fp=${FP:0:12}"
