@@ -9,7 +9,7 @@ name: Build & Deploy (Backup Tools)
 # org. GitHub has no setting that shares an org's private reusable workflow with
 # an outside owner, so the Actions half of the pipeline is inlined here.
 #
-# The HOST half is NOT copied. @zynalgo/deploy-lib is a GitHub PACKAGE, and a
+# The HOST half is NOT copied. @kigwin/deploy-lib is a GitHub PACKAGE, and a
 # package is readable with read:packages from anywhere — so the release swap,
 # the PM2 ecosystem, the health gate, the rollback and the fleet port check are
 # still the fleet's own code, fetched at a pinned version and shipped to the VPS
@@ -76,7 +76,7 @@ jobs:
       # written against. v1 of the shared workflow pins the same one — the only
       # commits after it touch lib/release.sh's drizzle toolchain, which this
       # service (migrations: "none") never reaches.
-      DEPLOY_LIB_VERSION: 1.2.3
+      DEPLOY_LIB_VERSION: 1.3.8
 
     steps:
       - uses: actions/checkout@v4
@@ -96,10 +96,10 @@ jobs:
           : "${TOKEN:?GH_PACKAGES_TOKEN is required — read:packages is enough}"
           VER="$DEPLOY_LIB_VERSION"
           mkdir -p "$CI_DIR"
-          META="$(curl -fsSL -H "Authorization: Bearer $TOKEN" https://npm.pkg.github.com/@zynalgo/deploy-lib)" \
-            || { echo "::error::cannot read @zynalgo/deploy-lib — does GH_PACKAGES_TOKEN have read:packages?"; exit 1; }
+          META="$(curl -fsSL -H "Authorization: Bearer $TOKEN" https://npm.pkg.github.com/@kigwin/deploy-lib)" \
+            || { echo "::error::cannot read @kigwin/deploy-lib — does GH_PACKAGES_TOKEN have read:packages?"; exit 1; }
           TARBALL="$(printf '%s' "$META" | jq -r --arg v "$VER" '.versions[$v].dist.tarball // empty')"
-          [ -n "$TARBALL" ] || { echo "::error::@zynalgo/deploy-lib@${VER} is not published (have: $(printf '%s' "$META" | jq -r '.versions|keys|join(", ")'))"; exit 1; }
+          [ -n "$TARBALL" ] || { echo "::error::@kigwin/deploy-lib@${VER} is not published (have: $(printf '%s' "$META" | jq -r '.versions|keys|join(", ")'))"; exit 1; }
           curl -fsSL -H "Authorization: Bearer $TOKEN" "$TARBALL" -o "$RUNNER_TEMP/deploy-lib.tgz"
           tar -xzf "$RUNNER_TEMP/deploy-lib.tgz" --strip-components=1 -C "$CI_DIR"
           [ -f "$CI_DIR/scripts/artifact-fingerprint.sh" ] || { echo "::error::the package did not contain scripts/"; exit 1; }
