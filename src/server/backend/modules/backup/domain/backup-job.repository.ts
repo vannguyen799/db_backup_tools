@@ -46,6 +46,19 @@ export class BackupJobRepository {
     return BackupJob.updateOne({ _id: id }, { gdriveFileId: '', gdriveWebViewLink: '' })
   }
 
+  /** Jobs for a target that still own an archive on local disk, newest first. */
+  listLocal(targetId: string) {
+    return BackupJob.find({ targetId, localPath: { $nin: [null, ''] } })
+      .sort({ createdAt: -1 })
+      .select('_id localPath')
+      .lean()
+  }
+
+  /** Forget the local archive after local retention deleted it. */
+  clearLocalFile(id: string) {
+    return BackupJob.updateOne({ _id: id }, { localPath: '' })
+  }
+
   recent(limit = 20) {
     return BackupJob.find().sort({ createdAt: -1 }).limit(limit).lean()
   }

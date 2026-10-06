@@ -1,3 +1,5 @@
+import os from 'node:os'
+import path from 'node:path'
 import { Module, type DynamicModule, type Type } from 'truxie'
 import { ScheduleModule } from '@truxie/schedule'
 import { logger } from '~/server/utils/logger'
@@ -34,6 +36,7 @@ const moduleImports: Array<Type | DynamicModule> = [
   }),
   BackupModule.forRoot({
     tmpDir: cfg.backupTmpDir as string,
+    localDir: (cfg.backupLocalDir as string) || path.join(os.homedir(), 'backup-tools', 'local'),
     mongodumpBin: cfg.mongodumpBin as string,
     pgDumpBin: cfg.pgDumpBin as string,
     schedulerEnabled: Boolean(cfg.schedulerEnabled),

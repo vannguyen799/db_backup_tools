@@ -8,6 +8,7 @@ Features
 - ⏱ Cron schedule per target + on-demand "Run Now"
 - ☁️ Google Drive upload via OAuth refresh token (`drive.file` scope only)
 - 🗑 Retention policy: keep last N or keep N days, auto-deletes old archives
+- 💾 Local fallback copy: each target's newest N archives (default 1, per target) also stay in `BACKUP_LOCAL_DIR/<targetId>/` on the server — kept even when the Drive upload fails
 - 🔎 Per-collection filter: pick from a fetched DB tree, or use gitignore-style patterns (`db.tmp_*`). Two modes: `exclude` (backup all except…) or `include` (only these)
 - 📊 Dashboard with job history, status, logs, and stats
 - 🐳 Docker Compose ready (includes `mongodb-database-tools` in image)

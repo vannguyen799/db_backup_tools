@@ -71,6 +71,9 @@ export default defineNuxtConfig({
       `${process.env.APP_URL || 'http://localhost:13280'}/api/gdrive/callback`,
 
     backupTmpDir: process.env.BACKUP_TMP_DIR || '/tmp/mongo-backup',
+    // Empty means "resolve at runtime" (~/backup-tools/local on the running host):
+    // this file is evaluated at BUILD time, so a homedir computed here would be the CI runner's.
+    backupLocalDir: process.env.BACKUP_LOCAL_DIR || '',
     mongodumpBin: process.env.MONGODUMP_BIN || 'mongodump',
     pgDumpBin: process.env.PGDUMP_BIN || 'pg_dump',
     schedulerEnabled: process.env.SCHEDULER_ENABLED !== 'false',

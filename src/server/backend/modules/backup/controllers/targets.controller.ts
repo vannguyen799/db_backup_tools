@@ -10,7 +10,7 @@ import { BackupRunnerService } from '../services/backup-runner.service'
 import { SourceProbeService } from '../services/source-probe.service'
 import { logger } from '~/server/utils/logger'
 import { sendSuccess } from '~/server/utils/response'
-import { collectionFilterSchema, retentionSchema } from '../mcp-schemas'
+import { collectionFilterSchema, localKeepCountSchema, retentionSchema } from '../mcp-schemas'
 
 const log = logger.getContext('TargetsCtrl')
 
@@ -84,6 +84,7 @@ export class TargetsController {
         gdriveFolderId: { type: 'string' },
         gdriveFolderName: { type: 'string' },
         retention: retentionSchema,
+        localKeepCount: localKeepCountSchema,
         enabled: { type: 'boolean', default: true },
       },
     },
@@ -118,6 +119,7 @@ export class TargetsController {
         gdriveFolderId: { type: 'string' },
         gdriveFolderName: { type: 'string' },
         retention: retentionSchema,
+        localKeepCount: localKeepCountSchema,
         enabled: { type: 'boolean' },
         machineId: { type: 'string', description: 'Pin the schedule to a specific machine.' },
         regenerateMachineId: { type: 'boolean', description: 'Re-pin the target to THIS machine.' },

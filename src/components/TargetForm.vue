@@ -302,6 +302,15 @@
           <input v-model.number="form.retention.keepDays" class="input" type="number" min="1" />
         </div>
       </div>
+      <div class="grid grid-cols-3 gap-4 mt-4">
+        <div>
+          <label class="label">Local copies on server</label>
+          <input v-model.number="form.localKeepCount" class="input" type="number" min="0" step="1" />
+        </div>
+        <p class="col-span-2 self-end text-xs text-[var(--color-text-muted)]">
+          Newest archives also kept on this server's disk, so a failed Drive upload never loses the dump. 0 disables.
+        </p>
+      </div>
     </div>
 
     <div class="flex items-center gap-3">
@@ -350,6 +359,7 @@ interface TargetForm {
   gdriveFolderId: string
   gdriveFolderName: string
   retention: { mode: 'count' | 'days' | 'none'; keepCount: number; keepDays: number }
+  localKeepCount: number
   enabled: boolean
   machineId: string
 }
@@ -397,6 +407,7 @@ const defaults: TargetForm = {
   gdriveFolderId: '',
   gdriveFolderName: '',
   retention: { mode: 'count', keepCount: 7, keepDays: 30 },
+  localKeepCount: 1,
   enabled: true,
   machineId: '',
 }

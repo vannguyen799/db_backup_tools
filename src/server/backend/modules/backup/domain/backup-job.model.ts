@@ -28,6 +28,10 @@ const backupJobSchema = new Schema(
     archiveFilename: { type: String },
     archiveSizeBytes: { type: Number },
 
+    // Absolute path of the archive kept on the server's disk, cleared once local
+    // retention deletes it. Set even when the Drive upload failed.
+    localPath: { type: String },
+
     gdriveFileId: { type: String },
     gdriveWebViewLink: { type: String },
 

@@ -362,6 +362,59 @@ export class BackupRunnerService {
     return this.runProcess('tar', ['-cf', outPath, '-C', workDir, '.'])
   }
 
+  /**
+   * Move a finished archive into this target's local keep-directory. Copy-then-rename
+   * when tmp and the keep-directory sit on different filesystems (rename fails with
+   * EXDEV), via a `.partial` name so a crash mid-copy never leaves a truncated file
+   * that looks like a real backup.
+   */
+  private async keepLocalCopy(targetId: string, srcPath: string, filename: string): Promise<string> {
+    const dir = path.join(this.config.localDir, targetId)
+    await fs.promises.mkdir(dir, { recursive: true })
+    const dest = path.join(dir, filename)
+    try {
+      await fs.promises.rename(srcPath, dest)
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err
+      const partial = `${dest}.partial`
+      try {
+        await fs.promises.copyFile(srcPath, partial)
+        await fs.promises.rename(partial, dest)
+      } catch (copyErr) {
+        await fs.promises.rm(partial, { force: true })
+        throw copyErr
+      }
+      await fs.promises.unlink(srcPath)
+    }
+    return dest
+  }
+
+  /**
+   * Keep only the newest `keep` local archives of a target (0 removes them all).
+   * Like Drive retention, ownership comes from this target's job records, and a path
+   * outside the configured local directory is never deleted.
+   */
+  private async applyLocalRetention(targetId: string, keep: number): Promise<string[]> {
+    const removed: string[] = []
+    try {
+      const root = path.resolve(this.config.localDir) + path.sep
+      const kept = await this.jobs.listLocal(targetId)
+      for (const job of kept.slice(Math.max(keep, 0))) {
+        const p = path.resolve(job.localPath!)
+        if (!p.startsWith(root)) {
+          log.warn(`Local retention: refusing to delete ${p}, outside ${root}`)
+          continue
+        }
+        await fs.promises.rm(p, { force: true })
+        await this.jobs.clearLocalFile(String(job._id))
+        removed.push(path.basename(p))
+      }
+    } catch (err) {
+      log.warn(`Local retention cleanup failed for target ${targetId}:`, (err as Error).message)
+    }
+    return removed
+  }
+
   private async applyRetention(target: IBackupTarget, accountId: string): Promise<string[]> {
     if (!target.retention || target.retention.mode === 'none') return []
     const removed: string[] = []
@@ -524,8 +577,11 @@ export class BackupRunnerService {
     let outputPath = ''
     let outputFilename = ''
     let workDir = ''
+    // Once the archive has moved into the local keep-directory it is no longer
+    // scratch: cleanup must leave it alone, whether the upload succeeds or not.
+    let keptLocally = false
     const cleanup = () => {
-      try { if (outputPath && fs.existsSync(outputPath)) fs.unlinkSync(outputPath) } catch { /* best-effort */ }
+      try { if (outputPath && !keptLocally && fs.existsSync(outputPath)) fs.unlinkSync(outputPath) } catch { /* best-effort */ }
       try { if (workDir && fs.existsSync(workDir)) fs.rmSync(workDir, { recursive: true, force: true }) } catch { /* best-effort */ }
     }
 
@@ -611,6 +667,23 @@ export class BackupRunnerService {
 
       const stat = fs.statSync(outputPath)
       append(`Archive created: ${outputFilename} (${formatBytes(stat.size)})`)
+
+      // Keep the archive on local disk BEFORE uploading, so a Drive failure below
+      // still leaves this run's dump recoverable from the server.
+      const targetId = String(target._id)
+      const localKeep = target.localKeepCount ?? 1
+      if (localKeep > 0) {
+        try {
+          outputPath = await this.keepLocalCopy(targetId, outputPath, outputFilename)
+          keptLocally = true
+          await this.jobs.update(String(job._id), { localPath: outputPath, archiveSizeBytes: stat.size })
+          append(`Local copy kept: ${outputPath}`)
+        } catch (err) {
+          append(`WARNING: could not keep a local copy: ${(err as Error).message}`)
+        }
+      }
+      const removedLocal = await this.applyLocalRetention(targetId, localKeep)
+      if (removedLocal.length) append(`Local retention removed ${removedLocal.length} old file(s): ${removedLocal.join(', ')}`)
 
       append('Uploading to Google Drive...')
       const upload = await withRetry('gdrive upload', () => this.gdrive.uploadFile({

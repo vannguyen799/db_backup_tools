@@ -48,6 +48,10 @@
           <div class="font-mono text-xs">{{ job.archiveFilename || '—' }}</div>
           <div class="text-xs text-[var(--color-text-muted)]">{{ formatBytes(job.archiveSizeBytes) }}</div>
         </div>
+        <div v-if="job.localPath">
+          <div class="label">Local copy (server)</div>
+          <div class="font-mono text-xs break-all">{{ job.localPath }}</div>
+        </div>
         <div v-if="job.gdriveWebViewLink">
           <div class="label">Google Drive</div>
           <a :href="job.gdriveWebViewLink" target="_blank" rel="noopener" class="text-[var(--color-accent)] text-xs">Open in Drive →</a>

@@ -192,6 +192,7 @@ interface Target {
   gdriveFolderId: string
   gdriveFolderName: string
   retention: { mode: 'count' | 'days' | 'none'; keepCount: number; keepDays: number }
+  localKeepCount?: number
   enabled: boolean
   machineId?: string
   currentMachineId?: string

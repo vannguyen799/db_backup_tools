@@ -50,6 +50,10 @@ const backupTargetSchema = new Schema(
 
     retention: { type: retentionSchema, default: () => ({}) },
 
+    // How many of this target's newest archives also stay on the server's disk, as a
+    // fallback for when the Drive upload fails or Drive is unreachable. 0 disables it.
+    localKeepCount: { type: Number, default: 1, min: 0 },
+
     enabled: { type: Boolean, default: true },
 
     machineId: { type: String, default: '' },

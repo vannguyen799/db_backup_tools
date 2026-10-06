@@ -17,6 +17,14 @@ export const retentionSchema = {
   },
 } as const
 
+export const localKeepCountSchema = {
+  type: 'integer',
+  minimum: 0,
+  default: 1,
+  description:
+    'How many of the newest archives also stay on the server disk, as a fallback when the Drive upload fails. 0 disables it.',
+} as const
+
 export const collectionFilterSchema = {
   type: 'object',
   description: 'Narrows what the dump covers. Omit to back up everything the includeDbs/excludeDbs allow.',

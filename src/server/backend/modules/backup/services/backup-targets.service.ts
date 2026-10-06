@@ -6,6 +6,13 @@ import { encryptString, decryptString } from '~/server/utils/crypto'
 import { getMachineId, isLocalDbUri } from '~/server/utils/machine-id'
 import { isObjectId } from '~/server/utils/object-id'
 
+function normalizeLocalKeepCount(value: unknown): number {
+  if (!Number.isInteger(value) || (value as number) < 0) {
+    throw new AppError('localKeepCount must be an integer >= 0', 400)
+  }
+  return value as number
+}
+
 function normalizeCollectionFilter(input?: CollectionFilterInput) {
   const mode: 'exclude' | 'include' = input?.mode === 'include' ? 'include' : 'exclude'
   const collections = (input?.collections || [])
@@ -44,6 +51,7 @@ export interface CreateTargetInput {
   gdriveFolderId?: string
   gdriveFolderName?: string
   retention?: RetentionInput
+  localKeepCount?: number
   enabled?: boolean
 }
 
@@ -110,6 +118,7 @@ export class BackupTargetsService {
         keepCount: input.retention?.keepCount ?? 7,
         keepDays: input.retention?.keepDays ?? 30,
       },
+      localKeepCount: input.localKeepCount === undefined ? 1 : normalizeLocalKeepCount(input.localKeepCount),
       enabled: input.enabled !== false,
       machineId: isLocalDbUri(input.mongoUri) ? getMachineId() : '',
     })
@@ -151,6 +160,7 @@ export class BackupTargetsService {
     if (typeof input.gdriveFolderId === 'string') patch.gdriveFolderId = input.gdriveFolderId
     if (typeof input.gdriveFolderName === 'string') patch.gdriveFolderName = input.gdriveFolderName
     if (input.retention) patch.retention = input.retention
+    if (input.localKeepCount !== undefined) patch.localKeepCount = normalizeLocalKeepCount(input.localKeepCount)
     if (typeof input.enabled === 'boolean') patch.enabled = input.enabled
 
     // Explicit machineId wins over the auto-set from mongoUri/regenerateMachineId above.

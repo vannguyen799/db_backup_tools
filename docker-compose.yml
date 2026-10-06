@@ -15,6 +15,7 @@ services:
       NUXT_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       NUXT_GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
       NUXT_BACKUP_TMP_DIR: /tmp/mongo-backup
+      NUXT_BACKUP_LOCAL_DIR: /data/local-backups
       NUXT_MONGODUMP_BIN: mongodump
       NUXT_SCHEDULER_ENABLED: "true"
       MACHINE_ID: ${MACHINE_ID:-}
@@ -23,6 +24,7 @@ services:
       - "13280:13280"
     volumes:
       - backup_tmp:/tmp/mongo-backup
+      - backup_local:/data/local-backups
       - /etc/machine-id:/etc/machine-id:ro
     networks:
       - default
@@ -30,6 +32,7 @@ services:
 
 volumes:
   backup_tmp:
+  backup_local:
 
 networks:
   metrixcrm_default:
