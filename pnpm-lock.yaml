@@ -18,8 +18,8 @@ importers:
         specifier: 0.1.1
         version: 0.1.1(truxie@0.1.2)
       '@truxie/mcp':
-        specifier: 0.3.0
-        version: 0.3.0(@truxie/jwt@0.1.1(truxie@0.1.2))(@truxie/rbac@0.1.1(truxie@0.1.2))(truxie@0.1.2)
+        specifier: 0.3.1
+        version: 0.3.1(@truxie/jwt@0.1.1(truxie@0.1.2))(@truxie/rbac@0.1.1(truxie@0.1.2))(truxie@0.1.2)
       '@truxie/nitro':
         specifier: 0.1.2
         version: 0.1.2(h3@1.15.11)(truxie@0.1.2)
@@ -27,8 +27,8 @@ importers:
         specifier: 0.1.1
         version: 0.1.1(truxie@0.1.2)
       '@truxie/schedule':
-        specifier: 0.1.1
-        version: 0.1.1(croner@10.0.1)(truxie@0.1.2)
+        specifier: 0.1.2
+        version: 0.1.2(croner@10.0.1)(truxie@0.1.2)
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -1537,8 +1537,8 @@ packages:
     peerDependencies:
       truxie: ^0.1.1
 
-  '@truxie/mcp@0.3.0':
-    resolution: {integrity: sha512-3ho0FpiEjpXNximJuvde+33S1d+8apIoayOIMv8qhkRo839WQjlTNJ16QO9S3t7X4O5mEmBcHxgPLlma7ydTdA==}
+  '@truxie/mcp@0.3.1':
+    resolution: {integrity: sha512-3lPzz8WYCC7pNtmJscXqoseWxy88RsfCAjDJezW1yJ9KOQrmltHULH4Bp47TM1TaWVnFA4Dvt4GV+U2YWLHajQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@truxie/jwt': ^0.1.1
@@ -1558,8 +1558,8 @@ packages:
     peerDependencies:
       truxie: ^0.1.1
 
-  '@truxie/schedule@0.1.1':
-    resolution: {integrity: sha512-xc4B8SvkQE4PhRvSWJhtIOhPUIbfijhYa0Ra0CaGf0cgWHajSOND8i0+bA9/hIZ5AlXsyPHF76xH91AyXwwkLA==}
+  '@truxie/schedule@0.1.2':
+    resolution: {integrity: sha512-X8IRX87hfXKrdERjubhpd9YF/5R9WpWSpP0pQwP2idqpM6kfUGB/bD+YSLcPAxgHJENRBQhkbFzNx/pxYknU5w==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       croner: ^9.0.0 || ^10.0.0
@@ -1633,6 +1633,11 @@ packages:
 
   '@volar/typescript@2.4.28':
     resolution: {integrity: sha512-Ja6yvWrbis2QtN4ClAKreeUZPVYMARDYZl9LMEv1iQ1QdepB6wn0jTRxA9MftYmYa4DQ4k/DaSZpFPUfxl8giw==}
+    peerDependencies:
+      typescript: '*'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   '@vue-macros/common@3.1.2':
     resolution: {integrity: sha512-h9t4ArDdniO9ekYHAD95t9AZcAbb19lEGK+26iAjUODOIJKmObDNBSe4+6ELQAA3vtYiFPPBtHh7+cQCKi3Dng==}
@@ -5452,7 +5457,7 @@ snapshots:
     dependencies:
       truxie: 0.1.2
 
-  '@truxie/mcp@0.3.0(@truxie/jwt@0.1.1(truxie@0.1.2))(@truxie/rbac@0.1.1(truxie@0.1.2))(truxie@0.1.2)':
+  '@truxie/mcp@0.3.1(@truxie/jwt@0.1.1(truxie@0.1.2))(@truxie/rbac@0.1.1(truxie@0.1.2))(truxie@0.1.2)':
     dependencies:
       '@truxie/jwt': 0.1.1(truxie@0.1.2)
       '@truxie/rbac': 0.1.1(truxie@0.1.2)
@@ -5467,9 +5472,10 @@ snapshots:
     dependencies:
       truxie: 0.1.2
 
-  '@truxie/schedule@0.1.1(croner@10.0.1)(truxie@0.1.2)':
+  '@truxie/schedule@0.1.2(croner@10.0.1)(truxie@0.1.2)':
     dependencies:
       croner: 10.0.1
+      reflect-metadata: 0.2.2
       truxie: 0.1.2
 
   '@tybys/wasm-util@0.10.2':
@@ -5559,11 +5565,13 @@ snapshots:
 
   '@volar/source-map@2.4.28': {}
 
-  '@volar/typescript@2.4.28':
+  '@volar/typescript@2.4.28(typescript@5.9.3)':
     dependencies:
       '@volar/language-core': 2.4.28
       path-browserify: 1.0.1
       vscode-uri: 3.1.0
+    optionalDependencies:
+      typescript: 5.9.3
 
   '@vue-macros/common@3.1.2(vue@3.5.34(typescript@5.9.3))':
     dependencies:
@@ -8256,7 +8264,7 @@ snapshots:
 
   vue-tsc@3.3.11(typescript@5.9.3):
     dependencies:
-      '@volar/typescript': 2.4.28
+      '@volar/typescript': 2.4.28(typescript@5.9.3)
       '@vue/language-core': 3.3.11
       typescript: 5.9.3
 
