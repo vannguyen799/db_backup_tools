@@ -10,7 +10,7 @@ import { BackupRunnerService } from '../services/backup-runner.service'
 import { SourceProbeService } from '../services/source-probe.service'
 import { logger } from '~/server/utils/logger'
 import { sendSuccess } from '~/server/utils/response'
-import { collectionFilterSchema, localKeepCountSchema, retentionSchema } from '../mcp-schemas'
+import { collectionFilterSchema, localKeepCountSchema, retentionSchema, storageProviderSchema } from '../mcp-schemas'
 
 const log = logger.getContext('TargetsCtrl')
 
@@ -57,7 +57,7 @@ export class TargetsController {
 
   @Post('/')
   @McpExpose({
-    summary: 'Create a backup target: a source database, a Drive destination and a cron schedule.',
+    summary: 'Create a backup target: a source database, a Google Drive or OneDrive destination and a cron schedule.',
     tags: ['targets'],
     write: true,
     idempotent: false,
@@ -80,15 +80,19 @@ export class TargetsController {
         excludeDbs: { type: 'array', items: { type: 'string' } },
         collectionFilter: collectionFilterSchema,
         cronExpression: { type: 'string', description: '5-field cron, server timezone. e.g. "0 3 * * *".' },
-        googleAuthId: { type: 'string', description: 'Id from GET /api/gdrive/accounts.' },
+        storageProvider: storageProviderSchema,
+        googleAuthId: { type: 'string', description: 'Id from GET /api/gdrive/accounts. Used when storageProvider is "gdrive".' },
         gdriveFolderId: { type: 'string' },
         gdriveFolderName: { type: 'string' },
+        onedriveAuthId: { type: 'string', description: 'Id from GET /api/onedrive/accounts. Used when storageProvider is "onedrive".' },
+        onedriveFolderId: { type: 'string', description: 'OneDrive item id of the folder. Empty means the drive root.' },
+        onedriveFolderName: { type: 'string' },
         retention: retentionSchema,
         localKeepCount: localKeepCountSchema,
         enabled: { type: 'boolean', default: true },
       },
     },
-    related: ['GET /api/gdrive/accounts'],
+    related: ['GET /api/gdrive/accounts', 'GET /api/onedrive/accounts'],
   })
   async create(@Body() body: CreateTargetInput) {
     return sendSuccess(await this.targets.create(body), 'Target created')
@@ -115,9 +119,13 @@ export class TargetsController {
         excludeDbs: { type: 'array', items: { type: 'string' } },
         collectionFilter: collectionFilterSchema,
         cronExpression: { type: 'string' },
+        storageProvider: storageProviderSchema,
         googleAuthId: { type: 'string' },
         gdriveFolderId: { type: 'string' },
         gdriveFolderName: { type: 'string' },
+        onedriveAuthId: { type: 'string' },
+        onedriveFolderId: { type: 'string' },
+        onedriveFolderName: { type: 'string' },
         retention: retentionSchema,
         localKeepCount: localKeepCountSchema,
         enabled: { type: 'boolean' },
@@ -148,10 +156,10 @@ export class TargetsController {
     dangerous: true,
     idempotent: false,
     confirmPrompt:
-      'This dumps the entire source database now and uploads the archive to Google Drive — real load on the production database and a new file on Drive. Run the backup?',
+      'This dumps the entire source database now and uploads the archive to the target\'s Google Drive or OneDrive folder — real load on the production database and a new file in cloud storage. Run the backup?',
     sideEffects: [
       'reads the whole source database with mongodump / pg_dump',
-      'uploads an archive to the configured Google Drive folder',
+      'uploads an archive to the configured Google Drive or OneDrive folder',
       'deletes older archives when the retention policy says so',
     ],
     cost: 'expensive',

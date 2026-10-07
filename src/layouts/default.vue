@@ -6,7 +6,7 @@
           <span class="inline-block w-2 h-2 rounded-full bg-[var(--color-accent)]"></span>
           Mongo Backup
         </h1>
-        <p class="text-xs text-[var(--color-text-muted)] mt-0.5">→ Google Drive</p>
+        <p class="text-xs text-[var(--color-text-muted)] mt-0.5">→ Google Drive / OneDrive</p>
       </div>
 
       <nav class="flex flex-col gap-1 text-sm flex-1">

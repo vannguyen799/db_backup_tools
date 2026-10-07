@@ -1,12 +1,13 @@
-# Mongo Backup → Google Drive
+# Mongo Backup → Google Drive / OneDrive
 
-Self-hosted service to schedule MongoDB backups (`mongodump --archive --gzip`) and ship them to Google Drive. Built with **Nuxt 4 + Vue 3 + Tailwind v4 + Mongoose + [truxie](https://www.npmjs.com/package/truxie)** (NestJS-style DI backend framework).
+Self-hosted service to schedule MongoDB backups (`mongodump --archive --gzip`) and ship them to Google Drive or OneDrive. Built with **Nuxt 4 + Vue 3 + Tailwind v4 + Mongoose + [truxie](https://www.npmjs.com/package/truxie)** (NestJS-style DI backend framework).
 
 Features
 - 🔐 Single-admin login (JWT, bcrypt, seeded from env)
 - 📦 Per-target MongoDB sources stored encrypted (AES-256-GCM) in Mongo
 - ⏱ Cron schedule per target + on-demand "Run Now"
 - ☁️ Google Drive upload via OAuth refresh token (`drive.file` scope only)
+- ☁️ OneDrive upload (personal or work/school) via Microsoft Graph — resumable 10 MiB chunked upload sessions, so multi-GB archives survive a dropped connection. Each target picks its provider.
 - 🗑 Retention policy: keep last N or keep N days, auto-deletes old archives
 - 💾 Local fallback copy: each target's newest N archives (default 1, per target) also stay in `BACKUP_LOCAL_DIR/<targetId>/` on the server — kept even when the Drive upload fails
 - 🔎 Per-collection filter: pick from a fetched DB tree, or use gitignore-style patterns (`db.tmp_*`). Two modes: `exclude` (backup all except…) or `include` (only these)
@@ -40,11 +41,24 @@ Features
 
 The app requests `access_type=offline` with `prompt=consent` and stores the resulting refresh token encrypted in Mongo. The access token is auto-refreshed.
 
+## Microsoft / OneDrive setup (optional)
+
+1. https://entra.microsoft.com → **App registrations → New registration**
+   - Supported account types: *Accounts in any organizational directory and personal Microsoft accounts* (matches `MICROSOFT_TENANT=common`)
+   - Redirect URI, platform **Web**: `${APP_URL}/api/onedrive/callback`
+2. **Certificates & secrets → New client secret**, then put the Application (client) ID and secret value into `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET`
+3. **API permissions** (delegated, Microsoft Graph): `offline_access`, `User.Read`, `Files.ReadWrite`
+4. Settings → **Connect a Microsoft account**, then set a target's *Upload destination* to **OneDrive**
+
+`Files.ReadWrite` (not the app-folder scope) is needed so you can pick or create any folder. Without env credentials you can still paste a client id (+ secret), tenant and refresh token on the Settings page. Microsoft rotates refresh tokens on every refresh; the newest one is stored encrypted, like the access token.
+
+Retention follows each job's own provider, so switching a target from Google Drive to OneDrive still ages out the older Drive archives — as long as the target keeps its Google account selected.
+
 ## Docker
 
 ```bash
 cp .env.example .env
-# fill JWT_SECRET, ENCRYPTION_KEY, ADMIN_*, GOOGLE_*, APP_URL
+# fill JWT_SECRET, ENCRYPTION_KEY, ADMIN_*, GOOGLE_*, APP_URL (and MICROSOFT_* for OneDrive)
 docker compose up -d --build
 ```
 
@@ -64,6 +78,7 @@ src/
 │   │       ├── app.module.ts            Composes all feature modules
 │   │       ├── auth/                    login, /me, admin seed
 │   │       ├── gdrive/                  OAuth + Drive client + folder mgmt
+│   │       ├── onedrive/                Microsoft OAuth + Graph client + folder mgmt
 │   │       ├── backup/                  targets, jobs, runner, scheduler
 │   │       └── health/
 │   ├── plugins/                         Nitro plugins (env, mongo, app)
@@ -106,6 +121,13 @@ src/
 | POST | `/api/gdrive/disconnect` | ✓ | Revoke local tokens |
 | GET | `/api/gdrive/folders` | ✓ | List folders (`?parentId=`) |
 | POST | `/api/gdrive/folders` | ✓ | Get-or-create folder |
+| GET | `/api/onedrive/status` | ✓ | Connected Microsoft accounts, env-cred flag, redirect URI |
+| GET | `/api/onedrive/accounts` | ✓ | Microsoft accounts (id = a target's `onedriveAuthId`) |
+| POST | `/api/onedrive/connect` | ✓ | Returns Microsoft sign-in URL |
+| POST | `/api/onedrive/accounts/manual` | ✓ | Add account from `{clientId, clientSecret?, refreshToken, tenant?, label?}` |
+| PATCH / DELETE | `/api/onedrive/accounts/:id` | ✓ | Relabel / disconnect |
+| GET | `/api/onedrive/callback` | – | OAuth callback → redirects to `/settings` |
+| GET / POST | `/api/onedrive/folders` | ✓ | List folders (`?accountId=&parentId=`) / get-or-create folder |
 | GET | `/api/api-keys` | ✓ | List API keys (hash redacted) |
 | POST | `/api/api-keys` | ✓ | Mint a key bound to one target — body: `{name, targetId, expiresAt?}`; returns plaintext **once** |
 | DELETE | `/api/api-keys/:id` | ✓ | Revoke a key |
@@ -195,7 +217,7 @@ Set `MCP_ENABLED=false` to remove the endpoint entirely — it answers 404 then.
 ### What is exposed
 
 Exposure is opt-in per route, declared with `@McpExpose()` on the controller
-method. 13 endpoints are exposed today:
+method. 15 endpoints are exposed today:
 
 | Exposed | Notes |
 |---------|-------|
@@ -205,11 +227,12 @@ method. 13 endpoints are exposed today:
 | `POST /api/targets/:id/run` | **dangerous** — `call_endpoint` refuses it until the caller passes `confirm: true` |
 | `GET /api/jobs`, `/recent`, `/stats`, `/:id` | Job history and scheduler state |
 | `GET /api/gdrive/status`, `/accounts` | Drive connection and account ids |
+| `GET /api/onedrive/status`, `/accounts` | OneDrive connection and Microsoft account ids |
 
 Deliberately **not** exposed, and the reasons matter more than the list:
 
 - `GET /api/targets/:id/uri` — returns the decrypted connection URI, credentials and all.
-- `DELETE /api/targets/:id`, `DELETE /api/gdrive/accounts/:id` — destructive, left to the dashboard.
+- `DELETE /api/targets/:id`, `DELETE /api/gdrive/accounts/:id`, `DELETE /api/onedrive/accounts/:id` — destructive, left to the dashboard.
 - `POST /api/auth/login`, `POST /api/auth/change-password` — an agent should not be trading credentials for tokens.
 - `POST /api/jobs/:id/download-url`, `GET /api/jobs/:id/download` — hands out the backup archive itself.
 - `/api/api-keys/*` and `/api/sync/*` — key management, and the machine-facing trigger that has its own API-key auth.
@@ -239,7 +262,7 @@ done
 ## Security notes
 
 - The MongoDB URIs you back up live in the config DB **encrypted** (AES-256-GCM, key from `ENCRYPTION_KEY`). Rotate the key by re-saving each target's URI after updating the env.
-- Refresh tokens for Drive are encrypted the same way.
+- Refresh tokens for Drive and OneDrive are encrypted the same way (OneDrive access tokens too).
 - The session token is a 30d JWT signed with `JWT_SECRET`. Set it to a strong random value.
 - API keys are stored **SHA-256 hashed** (never in plaintext), each locked to one target, with optional expiry and one-click revoke. Only the non-secret `bk_live_…` prefix is kept for display.
 - `drive.file` scope means this app can only see files it created — it cannot read your existing Drive contents.

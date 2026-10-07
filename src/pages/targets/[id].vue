@@ -68,12 +68,13 @@
                   <div class="font-mono break-all">{{ j.archiveFilename || '—' }}</div>
                 </div>
                 <div>
-                  <div class="label">Drive</div>
-                  <a v-if="j.gdriveWebViewLink" :href="j.gdriveWebViewLink" target="_blank" rel="noopener" class="text-[var(--color-accent)]">Open →</a>
+                  <div class="label">{{ j.onedriveItemId ? 'OneDrive' : 'Drive' }}</div>
+                  <a v-if="j.onedriveWebUrl" :href="j.onedriveWebUrl" target="_blank" rel="noopener" class="text-[var(--color-accent)]">Open →</a>
+                  <a v-else-if="j.gdriveWebViewLink" :href="j.gdriveWebViewLink" target="_blank" rel="noopener" class="text-[var(--color-accent)]">Open →</a>
                   <span v-else>—</span>
                 </div>
               </div>
-              <div v-if="j.gdriveFileId" class="flex items-center gap-2">
+              <div v-if="j.gdriveFileId || j.onedriveItemId" class="flex items-center gap-2">
                 <button class="btn" :disabled="!!downloading[j._id]" @click="download(j)">
                   {{ downloading[j._id] ? '↓ Preparing…' : '↓ Download archive' }}
                 </button>
@@ -188,9 +189,13 @@ interface Target {
     patterns: string[]
   }
   cronExpression: string
+  storageProvider?: 'gdrive' | 'onedrive'
   googleAuthId?: string
   gdriveFolderId: string
   gdriveFolderName: string
+  onedriveAuthId?: string
+  onedriveFolderId?: string
+  onedriveFolderName?: string
   retention: { mode: 'count' | 'days' | 'none'; keepCount: number; keepDays: number }
   localKeepCount?: number
   enabled: boolean
@@ -210,6 +215,8 @@ interface Job {
   finishedAt?: string
   gdriveFileId?: string
   gdriveWebViewLink?: string
+  onedriveItemId?: string
+  onedriveWebUrl?: string
   log?: string
   error?: string
 }
@@ -288,7 +295,12 @@ async function refresh() {
       api.get<Job[]>(`/api/jobs?targetId=${id}&limit=50`),
       api.get<ApiKeyRow[]>('/api/api-keys'),
     ])
-    target.value = { ...t, mongoUri: '', googleAuthId: t.googleAuthId || undefined }
+    target.value = {
+      ...t,
+      mongoUri: '',
+      googleAuthId: t.googleAuthId || undefined,
+      onedriveAuthId: t.onedriveAuthId || undefined,
+    }
     jobs.value = list
     keys.value = allKeys.filter((k) => k.targetId === id)
   } finally {
@@ -311,7 +323,7 @@ async function onSubmit(form: Record<string, any>) {
 }
 
 async function onDelete() {
-  if (!confirm(`Delete target "${target.value?.name}"? Existing backup files in Drive are not removed.`)) return
+  if (!confirm(`Delete target "${target.value?.name}"? Existing backup files in Google Drive / OneDrive are not removed.`)) return
   await api.del(`/api/targets/${route.params.id}`)
   await navigateTo('/targets')
 }

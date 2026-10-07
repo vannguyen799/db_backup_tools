@@ -17,12 +17,20 @@ export const retentionSchema = {
   },
 } as const
 
+export const storageProviderSchema = {
+  type: 'string',
+  enum: ['gdrive', 'onedrive'],
+  default: 'gdrive',
+  description:
+    'Where archives are uploaded. "gdrive" uses googleAuthId/gdriveFolderId, "onedrive" uses onedriveAuthId/onedriveFolderId.',
+} as const
+
 export const localKeepCountSchema = {
   type: 'integer',
   minimum: 0,
   default: 1,
   description:
-    'How many of the newest archives also stay on the server disk, as a fallback when the Drive upload fails. 0 disables it.',
+    'How many of the newest archives also stay on the server disk, as a fallback when the cloud upload fails. 0 disables it.',
 } as const
 
 export const collectionFilterSchema = {

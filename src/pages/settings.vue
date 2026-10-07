@@ -1,7 +1,7 @@
 <template>
   <div>
     <h1 class="text-xl font-semibold mb-1">Settings</h1>
-    <p class="text-sm text-[var(--color-text-muted)] mb-6">Manage your account and Google Drive integrations</p>
+    <p class="text-sm text-[var(--color-text-muted)] mb-6">Manage your account and Google Drive / OneDrive integrations</p>
 
     <div v-if="banner" class="mb-4 panel p-3 text-sm" :class="bannerClass">{{ banner }}</div>
 
@@ -137,6 +137,8 @@
       <p class="mb-2">Use this exact value in your Google Cloud Console OAuth client (only needed for the OAuth flow tab):</p>
       <code class="block panel-2 p-2 font-mono text-[var(--color-accent)] break-all">{{ envInfo.redirectUri }}</code>
     </div>
+
+    <OneDriveAccounts class="mt-8" />
   </div>
 </template>
 

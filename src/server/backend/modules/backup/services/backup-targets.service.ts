@@ -37,6 +37,7 @@ export interface CollectionFilterInput {
 }
 
 export type DatabaseType = 'mongodb' | 'postgresql'
+export type StorageProvider = 'gdrive' | 'onedrive'
 
 export interface CreateTargetInput {
   name: string
@@ -47,9 +48,13 @@ export interface CreateTargetInput {
   excludeDbs?: string[]
   collectionFilter?: CollectionFilterInput
   cronExpression: string
+  storageProvider?: StorageProvider
   googleAuthId?: string
   gdriveFolderId?: string
   gdriveFolderName?: string
+  onedriveAuthId?: string
+  onedriveFolderId?: string
+  onedriveFolderName?: string
   retention?: RetentionInput
   localKeepCount?: number
   enabled?: boolean
@@ -110,9 +115,13 @@ export class BackupTargetsService {
       excludeDbs: input.excludeDbs || [],
       collectionFilter: normalizeCollectionFilter(input.collectionFilter) as never,
       cronExpression: input.cronExpression,
+      storageProvider: input.storageProvider === 'onedrive' ? 'onedrive' : 'gdrive',
       googleAuthId: input.googleAuthId ? (input.googleAuthId as never) : null,
       gdriveFolderId: input.gdriveFolderId || '',
       gdriveFolderName: input.gdriveFolderName || '',
+      onedriveAuthId: input.onedriveAuthId ? (input.onedriveAuthId as never) : null,
+      onedriveFolderId: input.onedriveFolderId || '',
+      onedriveFolderName: input.onedriveFolderName || '',
       retention: {
         mode: input.retention?.mode || 'count',
         keepCount: input.retention?.keepCount ?? 7,
@@ -159,6 +168,14 @@ export class BackupTargetsService {
     }
     if (typeof input.gdriveFolderId === 'string') patch.gdriveFolderId = input.gdriveFolderId
     if (typeof input.gdriveFolderName === 'string') patch.gdriveFolderName = input.gdriveFolderName
+    if (input.storageProvider === 'gdrive' || input.storageProvider === 'onedrive') {
+      patch.storageProvider = input.storageProvider
+    }
+    if (typeof input.onedriveAuthId === 'string') {
+      patch.onedriveAuthId = input.onedriveAuthId ? input.onedriveAuthId : null
+    }
+    if (typeof input.onedriveFolderId === 'string') patch.onedriveFolderId = input.onedriveFolderId
+    if (typeof input.onedriveFolderName === 'string') patch.onedriveFolderName = input.onedriveFolderName
     if (input.retention) patch.retention = input.retention
     if (input.localKeepCount !== undefined) patch.localKeepCount = normalizeLocalKeepCount(input.localKeepCount)
     if (typeof input.enabled === 'boolean') patch.enabled = input.enabled

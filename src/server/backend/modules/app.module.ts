@@ -6,6 +6,7 @@ import { logger } from '~/server/utils/logger'
 
 import { AuthModule } from './auth/auth.module'
 import { GoogleDriveModule } from './gdrive/gdrive.module'
+import { OneDriveModule } from './onedrive/onedrive.module'
 import { BackupModule } from './backup/backup.module'
 import { HealthModule } from './health/health.module'
 
@@ -33,6 +34,13 @@ const moduleImports: Array<Type | DynamicModule> = [
     clientId: cfg.googleClientId as string,
     clientSecret: cfg.googleClientSecret as string,
     redirectUri: cfg.googleRedirectUri as string,
+  }),
+  OneDriveModule.forRoot({
+    clientId: cfg.microsoftClientId as string,
+    clientSecret: cfg.microsoftClientSecret as string,
+    tenant: (cfg.microsoftTenant as string) || 'common',
+    redirectUri:
+      (cfg.microsoftRedirectUri as string) || `${cfg.public.appUrl as string}/api/onedrive/callback`,
   }),
   BackupModule.forRoot({
     tmpDir: cfg.backupTmpDir as string,

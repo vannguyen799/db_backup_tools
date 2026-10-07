@@ -44,9 +44,16 @@ const backupTargetSchema = new Schema(
 
     cronExpression: { type: String, default: '0 3 * * *' },
 
+    // Where archives are uploaded. Only the selected provider's fields below are used.
+    storageProvider: { type: String, enum: ['gdrive', 'onedrive'], default: 'gdrive' },
+
     googleAuthId: { type: Schema.Types.ObjectId, ref: 'GoogleAuth', default: null },
     gdriveFolderId: { type: String, default: '' },
     gdriveFolderName: { type: String, default: '' },
+
+    onedriveAuthId: { type: Schema.Types.ObjectId, ref: 'MicrosoftAuth', default: null },
+    onedriveFolderId: { type: String, default: '' },
+    onedriveFolderName: { type: String, default: '' },
 
     retention: { type: retentionSchema, default: () => ({}) },
 

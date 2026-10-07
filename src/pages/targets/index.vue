@@ -3,7 +3,7 @@
     <div class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-xl font-semibold">Backup Targets</h1>
-        <p class="text-sm text-[var(--color-text-muted)] mt-0.5">MongoDB &amp; PostgreSQL sources to dump and ship to Drive</p>
+        <p class="text-sm text-[var(--color-text-muted)] mt-0.5">MongoDB &amp; PostgreSQL sources to dump and ship to Google Drive or OneDrive</p>
       </div>
       <div class="flex items-center gap-2">
         <button class="btn" :disabled="refreshing" @click="refresh">{{ refreshing ? '↻ Refreshing…' : '↻ Refresh' }}</button>
@@ -22,7 +22,7 @@
             <th>Name</th>
             <th>Type</th>
             <th>Cron</th>
-            <th>GDrive Folder</th>
+            <th>Destination</th>
             <th>Retention</th>
             <th>Enabled</th>
             <th>Last Status</th>
@@ -42,7 +42,10 @@
             </td>
             <td><span class="badge text-xs">{{ t.databaseType === 'postgresql' ? 'PostgreSQL' : 'MongoDB' }}</span></td>
             <td><code class="text-xs">{{ t.cronExpression }}</code></td>
-            <td>{{ t.gdriveFolderName || 'My Drive' }}</td>
+            <td>
+              <span class="badge text-xs mr-1">{{ t.storageProvider === 'onedrive' ? 'OneDrive' : 'GDrive' }}</span>
+              {{ t.storageProvider === 'onedrive' ? (t.onedriveFolderName || 'root') : (t.gdriveFolderName || 'My Drive') }}
+            </td>
             <td>{{ retentionLabel(t.retention) }}</td>
             <td>
               <span class="badge" :class="t.enabled ? 'badge-success' : ''">{{ t.enabled ? 'on' : 'off' }}</span>
@@ -70,8 +73,10 @@ interface Target {
   description: string
   databaseType?: 'mongodb' | 'postgresql'
   cronExpression: string
+  storageProvider?: 'gdrive' | 'onedrive'
   gdriveFolderId: string
   gdriveFolderName: string
+  onedriveFolderName?: string
   retention: Retention
   enabled: boolean
   lastJobStatus?: string

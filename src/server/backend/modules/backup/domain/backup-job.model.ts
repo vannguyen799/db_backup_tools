@@ -32,8 +32,15 @@ const backupJobSchema = new Schema(
     // retention deletes it. Set even when the Drive upload failed.
     localPath: { type: String },
 
+    // Provider the target uploaded to when this job ran; an older job may differ
+    // from the target's current provider.
+    storageProvider: { type: String, enum: ['gdrive', 'onedrive'], default: 'gdrive' },
+
     gdriveFileId: { type: String },
     gdriveWebViewLink: { type: String },
+
+    onedriveItemId: { type: String },
+    onedriveWebUrl: { type: String },
 
     log: { type: String, default: '' },
     error: { type: String },

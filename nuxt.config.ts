@@ -70,6 +70,13 @@ export default defineNuxtConfig({
       process.env.GOOGLE_REDIRECT_URI ||
       `${process.env.APP_URL || 'http://localhost:13280'}/api/gdrive/callback`,
 
+    microsoftClientId: process.env.MICROSOFT_CLIENT_ID || '',
+    microsoftClientSecret: process.env.MICROSOFT_CLIENT_SECRET || '',
+    microsoftTenant: process.env.MICROSOFT_TENANT || 'common',
+    // Empty means "derive from APP_URL at runtime" (see app.module.ts): a default
+    // interpolated here would be baked in at BUILD time and point at localhost.
+    microsoftRedirectUri: process.env.MICROSOFT_REDIRECT_URI || '',
+
     backupTmpDir: process.env.BACKUP_TMP_DIR || '/tmp/mongo-backup',
     // Empty means "resolve at runtime" (~/backup-tools/local on the running host):
     // this file is evaluated at BUILD time, so a homedir computed here would be the CI runner's.

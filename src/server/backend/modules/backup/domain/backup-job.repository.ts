@@ -31,19 +31,27 @@ export class BackupJobRepository {
   }
 
   /**
-   * Jobs for a target that still own an uploaded Drive archive, newest first.
-   * Retention works off these records rather than off Drive filenames.
+   * Jobs for a target that still own an uploaded archive (Google Drive or OneDrive),
+   * newest first. Retention works off these records rather than off remote filenames.
    */
   listUploaded(targetId: string) {
-    return BackupJob.find({ targetId, gdriveFileId: { $nin: [null, ''] } })
+    return BackupJob.find({
+      targetId,
+      $or: [{ gdriveFileId: { $nin: [null, ''] } }, { onedriveItemId: { $nin: [null, ''] } }],
+    })
       .sort({ createdAt: -1 })
-      .select('_id startedAt gdriveFileId archiveFilename')
+      .select('_id startedAt gdriveFileId onedriveItemId archiveFilename')
       .lean()
   }
 
   /** Forget the Drive archive after retention deleted it — the file is really gone. */
   clearGdriveFile(id: string) {
     return BackupJob.updateOne({ _id: id }, { gdriveFileId: '', gdriveWebViewLink: '' })
+  }
+
+  /** Forget the OneDrive archive after retention deleted it. */
+  clearOnedriveFile(id: string) {
+    return BackupJob.updateOne({ _id: id }, { onedriveItemId: '', onedriveWebUrl: '' })
   }
 
   /** Jobs for a target that still own an archive on local disk, newest first. */

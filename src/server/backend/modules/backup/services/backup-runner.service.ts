@@ -9,6 +9,7 @@ import { BackupJobRepository } from '../domain/backup-job.repository'
 import { type IBackupTarget } from '../domain/backup-target.model'
 import { SourceProbeService } from './source-probe.service'
 import { GoogleDriveService } from '$/modules/gdrive/services/gdrive.service'
+import { OneDriveService } from '$/modules/onedrive/services/onedrive.service'
 import { decryptString } from '~/server/utils/crypto'
 import { getMachineId } from '~/server/utils/machine-id'
 import { isObjectId } from '~/server/utils/object-id'
@@ -121,6 +122,13 @@ interface PgDumpPlan {
 
 export type TriggeredBy = 'cron' | 'manual' | 'api'
 
+/** The cloud destination a target uploads to, resolved once per run. */
+interface Destination {
+  provider: 'gdrive' | 'onedrive'
+  label: string
+  upload(filePath: string, filename: string): Promise<{ id: string; size: number; link: string }>
+}
+
 interface PreparedRun {
   target: IBackupTarget
   job: Awaited<ReturnType<BackupJobRepository['create']>>
@@ -129,13 +137,14 @@ interface PreparedRun {
 }
 
 @Injectable()
-@Inject(BACKUP_MODULE_OPTIONS, BackupTargetRepository, BackupJobRepository, GoogleDriveService, SourceProbeService)
+@Inject(BACKUP_MODULE_OPTIONS, BackupTargetRepository, BackupJobRepository, GoogleDriveService, OneDriveService, SourceProbeService)
 export class BackupRunnerService {
   constructor(
     private readonly config: BackupModuleConfig,
     private readonly targets: BackupTargetRepository,
     private readonly jobs: BackupJobRepository,
     private readonly gdrive: GoogleDriveService,
+    private readonly onedrive: OneDriveService,
     private readonly probe: SourceProbeService,
   ) {}
 
@@ -391,7 +400,7 @@ export class BackupRunnerService {
 
   /**
    * Keep only the newest `keep` local archives of a target (0 removes them all).
-   * Like Drive retention, ownership comes from this target's job records, and a path
+   * Like remote (Drive/OneDrive) retention, ownership comes from this target's job records, and a path
    * outside the configured local directory is never deleted.
    */
   private async applyLocalRetention(targetId: string, keep: number): Promise<string[]> {
@@ -415,15 +424,56 @@ export class BackupRunnerService {
     return removed
   }
 
-  private async applyRetention(target: IBackupTarget, accountId: string): Promise<string[]> {
+  private resolveDestination(target: IBackupTarget): Destination {
+    if (target.storageProvider === 'onedrive') {
+      if (!target.onedriveAuthId) {
+        throw new Error('Target has no Microsoft account selected. Pick one in the target settings.')
+      }
+      const accountId = String(target.onedriveAuthId)
+      return {
+        provider: 'onedrive',
+        label: 'OneDrive',
+        upload: async (filePath, filename) => {
+          const r = await this.onedrive.uploadFile({
+            accountId,
+            filePath,
+            filename,
+            folderId: target.onedriveFolderId || undefined,
+          })
+          return { id: r.id, size: r.size, link: r.webUrl }
+        },
+      }
+    }
+    if (!target.googleAuthId) {
+      throw new Error('Target has no Google account selected. Pick one in the target settings.')
+    }
+    const accountId = String(target.googleAuthId)
+    return {
+      provider: 'gdrive',
+      label: 'Google Drive',
+      upload: async (filePath, filename) => {
+        const r = await this.gdrive.uploadFile({
+          accountId,
+          filePath,
+          filename,
+          folderId: target.gdriveFolderId || undefined,
+          mimeType: filename.endsWith('.tar') ? 'application/x-tar' : 'application/gzip',
+        })
+        return { id: r.id, size: r.size, link: r.webViewLink }
+      },
+    }
+  }
+
+  private async applyRetention(target: IBackupTarget): Promise<string[]> {
     if (!target.retention || target.retention.mode === 'none') return []
     const removed: string[] = []
     try {
-      // Retention works off THIS target's own job records, never off Drive filenames.
+      // Retention works off THIS target's own job records, never off remote filenames.
       // Names cannot carry the ownership: renaming a target orphans every archive
       // written under the old name (they would then live forever), and two names that
       // collide once safeName() has sanitised them would delete each other's backups.
-      // A job row names exactly one file this target uploaded.
+      // A job row names exactly one file this target uploaded — on whichever provider
+      // the target used at the time, so switching provider still ages out old archives.
       const uploaded = await this.jobs.listUploaded(String(target._id))
 
       let doomed = [] as typeof uploaded
@@ -436,18 +486,29 @@ export class BackupRunnerService {
       }
 
       for (const job of doomed) {
-        if (!job.gdriveFileId) continue
+        const isOneDrive = !!job.onedriveItemId
+        const fileId = isOneDrive ? job.onedriveItemId! : job.gdriveFileId
+        const accountRef = isOneDrive ? target.onedriveAuthId : target.googleAuthId
+        if (!fileId) continue
+        if (!accountRef) {
+          // The target no longer has an account for the provider this archive lives
+          // on: leave the pointer so the file is not forgotten while it still exists.
+          log.warn(`Retention: no ${isOneDrive ? 'Microsoft' : 'Google'} account on ${target.name} to delete ${fileId}`)
+          continue
+        }
         try {
-          await this.gdrive.deleteFile(accountId, job.gdriveFileId)
+          if (isOneDrive) await this.onedrive.deleteFile(String(accountRef), fileId)
+          else await this.gdrive.deleteFile(String(accountRef), fileId)
         } catch (err) {
-          // Already gone from Drive (someone deleted it by hand): still drop our
-          // pointer so the job stops advertising a download that cannot work.
+          // Already gone (someone deleted it by hand): still drop our pointer so the
+          // job stops advertising a download that cannot work.
           const msg = (err as Error).message
           if (!/not found|404/i.test(msg)) throw err
-          log.warn(`Retention: ${job.gdriveFileId} already absent from Drive (${msg})`)
+          log.warn(`Retention: ${fileId} already absent from ${isOneDrive ? 'OneDrive' : 'Drive'} (${msg})`)
         }
-        await this.jobs.clearGdriveFile(String(job._id))
-        removed.push(job.archiveFilename || job.gdriveFileId)
+        if (isOneDrive) await this.jobs.clearOnedriveFile(String(job._id))
+        else await this.jobs.clearGdriveFile(String(job._id))
+        removed.push(job.archiveFilename || fileId)
       }
     } catch (err) {
       log.warn(`Retention cleanup failed for ${target.name}:`, (err as Error).message)
@@ -546,6 +607,7 @@ export class BackupRunnerService {
       status: 'running',
       triggeredBy,
       reason: reason?.trim() || undefined,
+      storageProvider: target.storageProvider === 'onedrive' ? 'onedrive' : 'gdrive',
       startedAt: new Date(),
       lastHeartbeatAt: new Date(),
       archiveFilename: `${baseName}.archive.gz`, // overwritten below for bundle mode
@@ -587,10 +649,7 @@ export class BackupRunnerService {
 
     try {
       append(`Backup starting (job ${job._id})`)
-      if (!target.googleAuthId) {
-        throw new Error('Target has no Google account selected. Pick one in the target settings.')
-      }
-      const accountId = String(target.googleAuthId)
+      const destination = this.resolveDestination(target)
       const connectionUri = decryptString(target.mongoUriEncrypted)
       const isPostgres = target.databaseType === 'postgresql'
 
@@ -668,7 +727,7 @@ export class BackupRunnerService {
       const stat = fs.statSync(outputPath)
       append(`Archive created: ${outputFilename} (${formatBytes(stat.size)})`)
 
-      // Keep the archive on local disk BEFORE uploading, so a Drive failure below
+      // Keep the archive on local disk BEFORE uploading, so an upload failure below
       // still leaves this run's dump recoverable from the server.
       const targetId = String(target._id)
       const localKeep = target.localKeepCount ?? 1
@@ -685,28 +744,24 @@ export class BackupRunnerService {
       const removedLocal = await this.applyLocalRetention(targetId, localKeep)
       if (removedLocal.length) append(`Local retention removed ${removedLocal.length} old file(s): ${removedLocal.join(', ')}`)
 
-      append('Uploading to Google Drive...')
-      const upload = await withRetry('gdrive upload', () => this.gdrive.uploadFile({
-        accountId,
-        filePath: outputPath,
-        filename: outputFilename,
-        folderId: target.gdriveFolderId || undefined,
-        mimeType: outputFilename.endsWith('.tar') ? 'application/x-tar' : 'application/gzip',
-      }), append)
-      append(`Uploaded to Drive: ${upload.id}`)
+      append(`Uploading to ${destination.label}...`)
+      const upload = await withRetry(`${destination.provider} upload`, () => destination.upload(outputPath, outputFilename), append)
+      append(`Uploaded to ${destination.label}: ${upload.id}`)
+      const remote = destination.provider === 'onedrive'
+        ? { onedriveItemId: upload.id, onedriveWebUrl: upload.link }
+        : { gdriveFileId: upload.id, gdriveWebViewLink: upload.link }
 
       // Record the archive BEFORE retention runs: retention counts this target's job
       // records, so the run that just uploaded has to be inside the keep-window like
-      // every other. It also means the Drive file is never orphaned if the process
+      // every other. It also means the remote file is never orphaned if the process
       // dies between the upload and the final status write.
       await this.jobs.update(String(job._id), {
         archiveFilename: outputFilename,
         archiveSizeBytes: upload.size,
-        gdriveFileId: upload.id,
-        gdriveWebViewLink: upload.webViewLink,
+        ...remote,
       })
 
-      const removed = await this.applyRetention(target, accountId)
+      const removed = await this.applyRetention(target)
       if (removed.length) append(`Retention removed ${removed.length} old file(s): ${removed.join(', ')}`)
 
       cleanup()
@@ -718,8 +773,7 @@ export class BackupRunnerService {
         durationMs: finishedAt.getTime() - job.startedAt!.getTime(),
         archiveSizeBytes: upload.size,
         archiveFilename: outputFilename,
-        gdriveFileId: upload.id,
-        gdriveWebViewLink: upload.webViewLink,
+        ...remote,
         log: capLog(logLines),
       })
       await this.targets.patchStatus(String(target._id), finishedAt, 'success')

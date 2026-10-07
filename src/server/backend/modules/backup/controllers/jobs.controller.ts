@@ -6,13 +6,14 @@ import { BackupJobRepository } from '../domain/backup-job.repository'
 import { BackupTargetRepository } from '../domain/backup-target.repository'
 import { BackupSchedulerService } from '../services/backup-scheduler.service'
 import { GoogleDriveService } from '$/modules/gdrive/services/gdrive.service'
+import { OneDriveService } from '$/modules/onedrive/services/onedrive.service'
 import { signDownloadToken, verifyDownloadToken } from '~/server/utils/jwt'
 import { isObjectId } from '~/server/utils/object-id'
 import { sendSuccess } from '~/server/utils/response'
 
 const Event = createParamDecorator<H3Event>((ctx) => ctx.getNativeRequest() as H3Event)
 
-@Inject(BackupJobRepository, BackupTargetRepository, BackupSchedulerService, GoogleDriveService)
+@Inject(BackupJobRepository, BackupTargetRepository, BackupSchedulerService, GoogleDriveService, OneDriveService)
 @Controller('jobs')
 @RouteGuards(AuthGuard)
 export class JobsController {
@@ -21,13 +22,14 @@ export class JobsController {
     private readonly targets: BackupTargetRepository,
     private readonly scheduler: BackupSchedulerService,
     private readonly gdrive: GoogleDriveService,
+    private readonly onedrive: OneDriveService,
   ) {}
 
   @Get('/')
   @McpExpose({
     summary: 'List backup jobs, newest first. Filter by target with `targetId`.',
     description:
-      'One row per backup run: status, timing, archive size, Drive file id and the failure message when it failed.',
+      'One row per backup run: status, timing, archive size, the Google Drive file id or OneDrive item id, and the failure message when it failed.',
     tags: ['jobs'],
     querySchema: {
       type: 'object',
@@ -92,7 +94,7 @@ export class JobsController {
     if (!isObjectId(id)) throw new NotFoundError('Job not found')
     const job = await this.jobs.findById(id)
     if (!job) throw new NotFoundError('Job not found')
-    if (!job.gdriveFileId) throw new AppError('Job has no archive on Google Drive', 400)
+    if (!job.gdriveFileId && !job.onedriveItemId) throw new AppError('Job has no archive in cloud storage', 400)
     const token = signDownloadToken(String(job._id))
     return sendSuccess({
       url: `/api/jobs/${job._id}/download?token=${encodeURIComponent(token)}`,
@@ -115,15 +117,20 @@ export class JobsController {
 
     const job = await this.jobs.findById(id)
     if (!job) throw new NotFoundError('Job not found')
-    if (!job.gdriveFileId) throw new AppError('Job has no archive on Google Drive', 400)
+    if (!job.gdriveFileId && !job.onedriveItemId) throw new AppError('Job has no archive in cloud storage', 400)
 
     const target = await this.targets.findById(String(job.targetId))
-    if (!target || !target.googleAuthId) {
-      throw new AppError('Target or Google account missing for this job', 400)
+    const isOneDrive = !!job.onedriveItemId
+    const accountRef = isOneDrive ? target?.onedriveAuthId : target?.googleAuthId
+    if (!target || !accountRef) {
+      throw new AppError(`Target or ${isOneDrive ? 'Microsoft' : 'Google'} account missing for this job`, 400)
     }
-    const accountId = String(target.googleAuthId)
+    const accountId = String(accountRef)
+    const fileId = (isOneDrive ? job.onedriveItemId : job.gdriveFileId)!
 
-    const meta = await this.gdrive.getFileMeta(accountId, job.gdriveFileId)
+    const meta = isOneDrive
+      ? await this.onedrive.getFileMeta(accountId, fileId)
+      : await this.gdrive.getFileMeta(accountId, fileId)
     const filename = job.archiveFilename || meta.name || `backup-${id}`
     const mime = job.archiveFilename?.endsWith('.tar')
       ? 'application/x-tar'
@@ -136,6 +143,8 @@ export class JobsController {
     if (meta.size > 0) setResponseHeader(event, 'content-length', meta.size)
     setResponseHeader(event, 'cache-control', 'no-store')
 
-    return this.gdrive.openFileStream(accountId, job.gdriveFileId)
+    return isOneDrive
+      ? this.onedrive.openFileStream(accountId, fileId)
+      : this.gdrive.openFileStream(accountId, fileId)
   }
 }

@@ -242,6 +242,26 @@
 
     <div class="panel-2 p-4">
       <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-semibold">Upload destination</h3>
+      </div>
+      <div class="flex border-b border-[var(--color-border)]">
+        <button
+          type="button"
+          class="px-4 py-2 text-sm border-b-2 transition-colors"
+          :class="form.storageProvider === 'gdrive' ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-muted)]'"
+          @click="form.storageProvider = 'gdrive'"
+        >Google Drive</button>
+        <button
+          type="button"
+          class="px-4 py-2 text-sm border-b-2 transition-colors"
+          :class="form.storageProvider === 'onedrive' ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-muted)]'"
+          @click="form.storageProvider = 'onedrive'"
+        >OneDrive</button>
+      </div>
+    </div>
+
+    <div v-if="form.storageProvider === 'gdrive'" class="panel-2 p-4">
+      <div class="flex items-center justify-between mb-3">
         <h3 class="text-sm font-semibold">Google Drive</h3>
         <span v-if="!accounts.length" class="badge badge-warning">No accounts</span>
         <span v-else-if="!form.googleAuthId" class="badge badge-warning">No account selected</span>
@@ -253,7 +273,7 @@
       <div v-else class="space-y-3">
         <div>
           <label class="label">Google account *</label>
-          <select v-model="form.googleAuthId" class="select" required @change="onAccountChange">
+          <select v-model="form.googleAuthId" class="select" :required="form.storageProvider === 'gdrive'" @change="onAccountChange">
             <option value="">— select an account —</option>
             <option v-for="a in accounts" :key="a.id" :value="a.id">
               {{ a.label ? `${a.label} (${a.email})` : a.email }}
@@ -276,6 +296,51 @@
             <div class="flex gap-2">
               <input v-model="newFolderName" class="input" placeholder="mongo-backups" />
               <button type="button" class="btn" :disabled="!newFolderName" @click="createFolder">Create</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="form.storageProvider === 'onedrive'" class="panel-2 p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-semibold">OneDrive</h3>
+        <span v-if="!msAccounts.length" class="badge badge-warning">No accounts</span>
+        <span v-else-if="!form.onedriveAuthId" class="badge badge-warning">No account selected</span>
+        <span v-else class="badge badge-success">{{ selectedMsAccountLabel }}</span>
+      </div>
+      <div v-if="!msAccounts.length" class="text-sm text-[var(--color-text-muted)]">
+        Connect a Microsoft account in <NuxtLink to="/settings" class="text-[var(--color-accent)]">Settings</NuxtLink> first.
+      </div>
+      <div v-else class="space-y-3">
+        <div>
+          <label class="label">Microsoft account *</label>
+          <select v-model="form.onedriveAuthId" class="select" :required="form.storageProvider === 'onedrive'" @change="onMsAccountChange">
+            <option value="">— select an account —</option>
+            <option v-for="a in msAccounts" :key="a.id" :value="a.id">
+              {{ a.label ? `${a.label} (${a.email})` : a.email }}
+            </option>
+          </select>
+        </div>
+        <div v-if="form.onedriveAuthId" class="grid grid-cols-[1fr_auto] gap-3 items-end">
+          <div>
+            <label class="label">Destination folder</label>
+            <div class="flex gap-2">
+              <select v-model="form.onedriveFolderId" class="select" @change="syncMsFolderName">
+                <option value="">OneDrive (root)</option>
+                <option v-if="form.onedriveFolderId && !msFolders.some((f) => f.id === form.onedriveFolderId)" :value="form.onedriveFolderId">
+                  {{ form.onedriveFolderName || form.onedriveFolderId }}
+                </option>
+                <option v-for="f in msFolders" :key="f.id" :value="f.id">{{ f.name }}</option>
+              </select>
+              <button type="button" class="btn" :disabled="loadingMsFolders" @click="loadMsFolders">↻</button>
+            </div>
+          </div>
+          <div>
+            <label class="label">New folder name</label>
+            <div class="flex gap-2">
+              <input v-model="newMsFolderName" class="input" placeholder="db-backups" />
+              <button type="button" class="btn" :disabled="!newMsFolderName" @click="createMsFolder">Create</button>
             </div>
           </div>
         </div>
@@ -308,7 +373,7 @@
           <input v-model.number="form.localKeepCount" class="input" type="number" min="0" step="1" />
         </div>
         <p class="col-span-2 self-end text-xs text-[var(--color-text-muted)]">
-          Newest archives also kept on this server's disk, so a failed Drive upload never loses the dump. 0 disables.
+          Newest archives also kept on this server's disk, so a failed cloud upload never loses the dump. 0 disables.
         </p>
       </div>
     </div>
@@ -355,9 +420,13 @@ interface TargetForm {
   excludeDbs: string[]
   collectionFilter: CollectionFilter
   cronExpression: string
+  storageProvider: 'gdrive' | 'onedrive'
   googleAuthId: string
   gdriveFolderId: string
   gdriveFolderName: string
+  onedriveAuthId: string
+  onedriveFolderId: string
+  onedriveFolderName: string
   retention: { mode: 'count' | 'days' | 'none'; keepCount: number; keepDays: number }
   localKeepCount: number
   enabled: boolean
@@ -369,7 +438,7 @@ interface AccountSummary {
   label: string
   email: string
   name: string
-  picture: string
+  picture?: string
   source: 'oauth' | 'manual'
 }
 
@@ -392,6 +461,10 @@ const folders = ref<{ id: string; name: string }[]>([])
 const loadingFolders = ref(false)
 const accounts = ref<AccountSummary[]>([])
 const newFolderName = ref('')
+const msFolders = ref<{ id: string; name: string }[]>([])
+const loadingMsFolders = ref(false)
+const msAccounts = ref<AccountSummary[]>([])
+const newMsFolderName = ref('')
 const submitError = ref('')
 
 const defaults: TargetForm = {
@@ -403,9 +476,13 @@ const defaults: TargetForm = {
   excludeDbs: [],
   collectionFilter: { mode: 'exclude', collections: [], patterns: [] },
   cronExpression: '0 3 * * *',
+  storageProvider: 'gdrive',
   googleAuthId: '',
   gdriveFolderId: '',
   gdriveFolderName: '',
+  onedriveAuthId: '',
+  onedriveFolderId: '',
+  onedriveFolderName: '',
   retention: { mode: 'count', keepCount: 7, keepDays: 30 },
   localKeepCount: 1,
   enabled: true,
@@ -415,7 +492,11 @@ const incoming = (props.initial || {}) as Partial<TargetForm>
 const form = reactive<TargetForm>({
   ...defaults,
   ...incoming,
+  storageProvider: incoming.storageProvider === 'onedrive' ? 'onedrive' : 'gdrive',
   googleAuthId: incoming.googleAuthId ? String(incoming.googleAuthId) : '',
+  onedriveAuthId: incoming.onedriveAuthId ? String(incoming.onedriveAuthId) : '',
+  onedriveFolderId: incoming.onedriveFolderId || '',
+  onedriveFolderName: incoming.onedriveFolderName || '',
   collectionFilter: {
     mode: (incoming.collectionFilter?.mode as 'exclude' | 'include') || 'exclude',
     collections: incoming.collectionFilter?.collections ? [...incoming.collectionFilter.collections] : [],
@@ -662,10 +743,62 @@ function onAccountChange() {
   if (form.googleAuthId) loadFolders()
 }
 
+function syncMsFolderName() {
+  const f = msFolders.value.find((x) => x.id === form.onedriveFolderId)
+  if (f) form.onedriveFolderName = f.name
+  else if (!form.onedriveFolderId) form.onedriveFolderName = ''
+}
+
+const selectedMsAccountLabel = computed(() => {
+  const a = msAccounts.value.find((x) => x.id === form.onedriveAuthId)
+  if (!a) return ''
+  return a.label ? `${a.label} (${a.email})` : a.email
+})
+
+async function loadMsFolders() {
+  if (!form.onedriveAuthId) {
+    msFolders.value = []
+    return
+  }
+  loadingMsFolders.value = true
+  try {
+    msFolders.value = await api.get(`/api/onedrive/folders?accountId=${encodeURIComponent(form.onedriveAuthId)}`)
+  } finally {
+    loadingMsFolders.value = false
+  }
+}
+
+async function createMsFolder() {
+  if (!newMsFolderName.value || !form.onedriveAuthId) return
+  const f = await api.post<{ id: string; name: string }>('/api/onedrive/folders', {
+    accountId: form.onedriveAuthId,
+    name: newMsFolderName.value,
+  })
+  await loadMsFolders()
+  form.onedriveFolderId = f.id
+  form.onedriveFolderName = f.name
+  newMsFolderName.value = ''
+}
+
+function onMsAccountChange() {
+  form.onedriveFolderId = ''
+  form.onedriveFolderName = ''
+  msFolders.value = []
+  if (form.onedriveAuthId) loadMsFolders()
+}
+
 function onSubmit() {
   submitError.value = ''
   if (!selectedDb.value) {
     submitError.value = 'Pick a database to back up.'
+    return
+  }
+  if (form.storageProvider === 'onedrive' && !form.onedriveAuthId) {
+    submitError.value = 'Pick a Microsoft account for the OneDrive destination.'
+    return
+  }
+  if (form.storageProvider === 'gdrive' && !form.googleAuthId) {
+    submitError.value = 'Pick a Google account for the Google Drive destination.'
     return
   }
   const db = selectedDb.value
@@ -691,6 +824,10 @@ onMounted(async () => {
   try {
     accounts.value = await api.get<AccountSummary[]>('/api/gdrive/accounts')
     if (form.googleAuthId) await loadFolders()
+  } catch { /* ignore */ }
+  try {
+    msAccounts.value = await api.get<AccountSummary[]>('/api/onedrive/accounts')
+    if (form.onedriveAuthId) await loadMsFolders()
   } catch { /* ignore */ }
 })
 </script>

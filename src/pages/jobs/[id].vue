@@ -56,7 +56,11 @@
           <div class="label">Google Drive</div>
           <a :href="job.gdriveWebViewLink" target="_blank" rel="noopener" class="text-[var(--color-accent)] text-xs">Open in Drive →</a>
         </div>
-        <div v-if="job.gdriveFileId">
+        <div v-if="job.onedriveWebUrl">
+          <div class="label">OneDrive</div>
+          <a :href="job.onedriveWebUrl" target="_blank" rel="noopener" class="text-[var(--color-accent)] text-xs">Open in OneDrive →</a>
+        </div>
+        <div v-if="job.gdriveFileId || job.onedriveItemId">
           <div class="label">Download</div>
           <button class="btn" :disabled="downloading" @click="download">
             {{ downloading ? '↓ Preparing…' : '↓ Download archive' }}
