@@ -117,6 +117,11 @@
           public client) plus a refresh token that app issued with the
           <code class="text-xs">offline_access Files.ReadWrite User.Read</code> scopes.
         </p>
+        <p class="text-xs text-[var(--color-text-muted)]">
+          No app registration? Run <code>rclone authorize "onedrive"</code> on a machine with a browser, sign in, and paste the
+          <code>refresh_token</code> it prints. Use rclone's own client id (check it in rclone's source), leave the secret empty and set tenant to
+          <code>consumers</code> for a personal account.
+        </p>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="label">Label (optional)</label>
