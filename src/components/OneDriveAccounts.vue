@@ -54,6 +54,11 @@
         >Device code</button>
         <button
           class="px-4 py-2 text-sm border-b-2 transition-colors"
+          :class="mode === 'paste-url' ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-muted)]'"
+          @click="mode = 'paste-url'"
+        >Paste redirect URL</button>
+        <button
+          class="px-4 py-2 text-sm border-b-2 transition-colors"
           :class="mode === 'manual' ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-muted)]'"
           @click="mode = 'manual'"
         >Paste credentials</button>
@@ -108,6 +113,50 @@
             <input v-model="device.clientId" class="input font-mono text-xs" placeholder="00000000-0000-0000-0000-000000000000" />
           </div>
           <button class="btn btn-primary" :disabled="busy" @click="startDevice">Get sign-in code</button>
+        </template>
+      </div>
+
+      <div v-else-if="mode === 'paste-url'" class="space-y-3">
+        <p class="text-sm text-[var(--color-text-muted)]">
+          For a public client (e.g. rclone's) whose redirect is <code class="text-xs">http://localhost:53682/</code>. Sign in, then the browser
+          lands on a page that fails to load — copy that full URL from the address bar and paste it below.
+        </p>
+        <template v-if="loop.url">
+          <div class="panel-2 p-3 space-y-2">
+            <div class="text-sm">1. Open this link and sign in:</div>
+            <a :href="loop.url" target="_blank" rel="noopener" class="block text-xs text-[var(--color-accent)] underline break-all">{{ loop.url }}</a>
+          </div>
+          <form class="space-y-3" @submit.prevent="finishLoop">
+            <div>
+              <label class="label">2. Paste the URL the browser ended up on</label>
+              <textarea v-model="loop.redirectUrl" class="textarea font-mono text-xs" rows="3" placeholder="http://localhost:53682/?code=M.C5...&state=..." required></textarea>
+            </div>
+            <div class="flex gap-2">
+              <button class="btn btn-primary" :disabled="busy">{{ busy ? 'Connecting…' : 'Connect' }}</button>
+              <button type="button" class="btn" @click="Object.assign(loop, { url: '', id: '', redirectUrl: '' })">Cancel</button>
+            </div>
+          </form>
+        </template>
+        <template v-else>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Label (optional)</label>
+              <input v-model="loop.label" class="input" placeholder="e.g. personal" />
+            </div>
+            <div>
+              <label class="label">Tenant</label>
+              <input v-model="loop.tenant" class="input font-mono text-xs" placeholder="consumers" />
+            </div>
+          </div>
+          <div>
+            <label class="label">Client ID</label>
+            <input v-model="loop.clientId" class="input font-mono text-xs" placeholder="00000000-0000-0000-0000-000000000000" />
+          </div>
+          <div>
+            <label class="label">Client Secret (optional)</label>
+            <input v-model="loop.clientSecret" type="password" class="input font-mono text-xs" />
+          </div>
+          <button class="btn btn-primary" :disabled="busy" @click="startLoop">Get sign-in link</button>
         </template>
       </div>
 
@@ -186,7 +235,7 @@ const loading = ref(true)
 const busy = ref(false)
 const banner = ref('')
 const bannerClass = ref('')
-const mode = ref<'oauth' | 'device' | 'manual'>('manual')
+const mode = ref<'oauth' | 'device' | 'paste-url' | 'manual'>('manual')
 const oauthLabel = ref('')
 const labelEdits = reactive<Record<string, string>>({})
 
@@ -234,6 +283,38 @@ async function startDevice() {
 }
 
 onBeforeUnmount(() => cancelDevice())
+
+const loop = reactive({ label: '', tenant: 'consumers', clientId: '', clientSecret: '', id: '', url: '', redirectUrl: '' })
+
+async function startLoop() {
+  busy.value = true
+  banner.value = ''
+  try {
+    const res = await api.post<{ id: string; url: string }>('/api/onedrive/loopback/start', {
+      clientId: loop.clientId, clientSecret: loop.clientSecret, tenant: loop.tenant, label: loop.label,
+    })
+    Object.assign(loop, { id: res.id, url: res.url, redirectUrl: '' })
+  } catch (err) {
+    showError(err)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function finishLoop() {
+  busy.value = true
+  try {
+    const acc = await api.post<Account>('/api/onedrive/loopback/finish', { id: loop.id, redirectUrl: loop.redirectUrl })
+    banner.value = `✓ Connected as ${acc.email || acc.label || 'Microsoft account'}`
+    bannerClass.value = 'border-[var(--color-success)] text-[var(--color-success)]'
+    Object.assign(loop, { id: '', url: '', redirectUrl: '' })
+    await refresh()
+  } catch (err) {
+    showError(err)
+  } finally {
+    busy.value = false
+  }
+}
 
 const manual = reactive({ label: '', tenant: '', clientId: '', clientSecret: '', refreshToken: '' })
 

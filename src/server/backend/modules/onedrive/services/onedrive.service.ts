@@ -77,6 +77,25 @@ interface DeviceFlow {
 
 const DEVICE_FLOWS = new Map<string, DeviceFlow>()
 
+interface LoopbackFlow {
+  clientId: string
+  clientSecret: string
+  tenant: string
+  label?: string
+  verifier: string
+  state: string
+  expiresAt: number
+}
+
+const LOOPBACK_FLOWS = new Map<string, LoopbackFlow>()
+// A public client's registered redirect; nothing listens here — the user copies the URL their browser lands on.
+const LOOPBACK_REDIRECT = 'http://localhost:53682/'
+
+function pruneLoopbackFlows() {
+  const now = Date.now()
+  for (const [k, v] of LOOPBACK_FLOWS) if (v.expiresAt < now) LOOPBACK_FLOWS.delete(k)
+}
+
 function pruneDeviceFlows() {
   const now = Date.now()
   for (const [k, v] of DEVICE_FLOWS) if (v.expiresAt < now) DEVICE_FLOWS.delete(k)
@@ -340,6 +359,80 @@ export class OneDriveService {
       source: 'manual',
     })
     return { status: 'connected', account }
+  }
+
+  /**
+   * Authorization-code + PKCE against a public client whose registered redirect is
+   * http://localhost:53682/. The browser lands on a dead localhost page; the user pastes
+   * that URL back and we redeem the code here.
+   */
+  startLoopback(input: { clientId?: string; clientSecret?: string; tenant?: string; label?: string }) {
+    const clientId = (input.clientId || this.config.clientId || '').trim()
+    if (!clientId) throw new AppError('clientId is required (or set MICROSOFT_CLIENT_ID)', 400)
+    const tenant = (input.tenant || '').trim() || 'consumers'
+    pruneLoopbackFlows()
+    const id = crypto.randomBytes(16).toString('hex')
+    const state = crypto.randomBytes(16).toString('hex')
+    const verifier = crypto.randomBytes(48).toString('base64url')
+    LOOPBACK_FLOWS.set(id, {
+      clientId,
+      clientSecret: (input.clientSecret || '').trim(),
+      tenant,
+      label: input.label,
+      verifier,
+      state,
+      expiresAt: Date.now() + 10 * 60_000,
+    })
+    const params = new URLSearchParams({
+      client_id: clientId,
+      response_type: 'code',
+      redirect_uri: LOOPBACK_REDIRECT,
+      response_mode: 'query',
+      scope: SCOPES.join(' '),
+      state,
+      code_challenge: crypto.createHash('sha256').update(verifier).digest('base64url'),
+      code_challenge_method: 'S256',
+      prompt: 'select_account',
+    })
+    return { id, url: `${LOGIN}/${encodeURIComponent(tenant)}/oauth2/v2.0/authorize?${params}` }
+  }
+
+  async finishLoopback(id: string, redirectUrl: string): Promise<AccountSummary> {
+    pruneLoopbackFlows()
+    const flow = LOOPBACK_FLOWS.get(id)
+    if (!flow) throw new AppError('Sign-in expired or unknown — start again', 400)
+    let q: URLSearchParams
+    try {
+      q = new URL((redirectUrl || '').trim()).searchParams
+    } catch {
+      throw new AppError('Paste the full URL from the browser address bar (http://localhost:53682/?code=…)', 400)
+    }
+    if (q.get('error')) throw new AppError(`Microsoft sign-in failed: ${q.get('error_description') || q.get('error')}`, 400)
+    const code = q.get('code')
+    if (!code) throw new AppError('The pasted URL has no code parameter', 400)
+    if (q.get('state') !== flow.state) throw new AppError('State mismatch — start the sign-in again', 400)
+    LOOPBACK_FLOWS.delete(id)
+
+    const tokens = await this.requestToken(flow.tenant, {
+      client_id: flow.clientId,
+      ...(flow.clientSecret ? { client_secret: flow.clientSecret } : {}),
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: LOOPBACK_REDIRECT,
+      code_verifier: flow.verifier,
+    })
+    if (!tokens.refresh_token) {
+      throw new AppError('Microsoft did not return a refresh_token — the offline_access scope was not granted.', 400)
+    }
+    const user = await this.fetchUser(tokens.access_token)
+    return this.saveAccount(tokens, user, {
+      label: flow.label,
+      refreshToken: tokens.refresh_token,
+      tenant: flow.tenant,
+      clientIdEncrypted: encryptString(flow.clientId),
+      clientSecretEncrypted: flow.clientSecret ? encryptString(flow.clientSecret) : '',
+      source: 'manual',
+    })
   }
 
   async updateLabel(id: string, label: string): Promise<AccountSummary> {

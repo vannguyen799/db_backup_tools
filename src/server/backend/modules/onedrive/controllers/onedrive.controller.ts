@@ -69,6 +69,16 @@ export class OneDriveController {
     return sendSuccess(await this.onedrive.pollDeviceCode(body?.id))
   }
 
+  @Post('/loopback/start')
+  async loopbackStart(@Body() body: { clientId?: string; clientSecret?: string; tenant?: string; label?: string } = {}) {
+    return sendSuccess(this.onedrive.startLoopback(body || {}))
+  }
+
+  @Post('/loopback/finish')
+  async loopbackFinish(@Body() body: { id: string; redirectUrl: string }) {
+    return sendSuccess(await this.onedrive.finishLoopback(body?.id, body?.redirectUrl), 'Microsoft account connected')
+  }
+
   @Post('/accounts/manual')
   async connectManual(
     @Body() body: { clientId: string; clientSecret?: string; refreshToken: string; tenant?: string; label?: string },
