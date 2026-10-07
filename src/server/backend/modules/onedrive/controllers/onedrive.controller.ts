@@ -59,6 +59,16 @@ export class OneDriveController {
     return sendSuccess({ url: this.onedrive.getAuthUrl(state), state })
   }
 
+  @Post('/device/start')
+  async deviceStart(@Body() body: { clientId?: string; tenant?: string; label?: string } = {}) {
+    return sendSuccess(await this.onedrive.startDeviceCode(body || {}))
+  }
+
+  @Post('/device/poll')
+  async devicePoll(@Body() body: { id: string }) {
+    return sendSuccess(await this.onedrive.pollDeviceCode(body?.id))
+  }
+
   @Post('/accounts/manual')
   async connectManual(
     @Body() body: { clientId: string; clientSecret?: string; refreshToken: string; tenant?: string; label?: string },

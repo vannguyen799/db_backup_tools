@@ -49,6 +49,11 @@
         >OAuth flow</button>
         <button
           class="px-4 py-2 text-sm border-b-2 transition-colors"
+          :class="mode === 'device' ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-muted)]'"
+          @click="mode = 'device'"
+        >Device code</button>
+        <button
+          class="px-4 py-2 text-sm border-b-2 transition-colors"
           :class="mode === 'manual' ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-muted)]'"
           @click="mode = 'manual'"
         >Paste credentials</button>
@@ -70,6 +75,40 @@
         <button class="btn btn-primary" :disabled="busy || !envInfo.hasEnvCreds" @click="connectOAuth">
           Connect a Microsoft account
         </button>
+      </div>
+
+      <div v-else-if="mode === 'device'" class="space-y-3">
+        <p class="text-sm text-[var(--color-text-muted)]">
+          Sign in by entering a short code at microsoft.com/link — no redirect URI or client secret needed. The client id
+          must belong to an app with <em>Allow public client flows</em> enabled.
+        </p>
+        <div v-if="device.userCode" class="panel-2 p-4 space-y-2">
+          <div class="text-sm">
+            Open
+            <a :href="device.verificationUri" target="_blank" rel="noopener" class="text-[var(--color-accent)] underline">{{ device.verificationUri }}</a>
+            and enter:
+          </div>
+          <code class="block text-2xl font-mono tracking-widest text-[var(--color-accent)]">{{ device.userCode }}</code>
+          <div class="text-xs text-[var(--color-text-muted)]">Waiting for you to sign in…</div>
+          <button class="btn" @click="cancelDevice">Cancel</button>
+        </div>
+        <template v-else>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Label (optional)</label>
+              <input v-model="device.label" class="input" placeholder="e.g. personal" />
+            </div>
+            <div>
+              <label class="label">Tenant</label>
+              <input v-model="device.tenant" class="input font-mono text-xs" placeholder="consumers" />
+            </div>
+          </div>
+          <div>
+            <label class="label">Client ID{{ envInfo.hasEnvCreds ? ' (optional — env default)' : '' }}</label>
+            <input v-model="device.clientId" class="input font-mono text-xs" placeholder="00000000-0000-0000-0000-000000000000" />
+          </div>
+          <button class="btn btn-primary" :disabled="busy" @click="startDevice">Get sign-in code</button>
+        </template>
       </div>
 
       <form v-else class="space-y-3" @submit.prevent="connectManual">
@@ -142,9 +181,54 @@ const loading = ref(true)
 const busy = ref(false)
 const banner = ref('')
 const bannerClass = ref('')
-const mode = ref<'oauth' | 'manual'>('manual')
+const mode = ref<'oauth' | 'device' | 'manual'>('manual')
 const oauthLabel = ref('')
 const labelEdits = reactive<Record<string, string>>({})
+
+const device = reactive({ label: '', tenant: 'consumers', clientId: '', userCode: '', verificationUri: '', id: '' })
+let devicePoller: ReturnType<typeof setTimeout> | null = null
+
+function cancelDevice() {
+  if (devicePoller) clearTimeout(devicePoller)
+  devicePoller = null
+  Object.assign(device, { userCode: '', verificationUri: '', id: '' })
+}
+
+async function startDevice() {
+  busy.value = true
+  banner.value = ''
+  try {
+    const res = await api.post<{ id: string; userCode: string; verificationUri: string; interval: number }>(
+      '/api/onedrive/device/start',
+      { clientId: device.clientId, tenant: device.tenant, label: device.label },
+    )
+    Object.assign(device, { id: res.id, userCode: res.userCode, verificationUri: res.verificationUri })
+    const tick = async () => {
+      if (!device.id) return
+      try {
+        const r = await api.post<{ status: string; account?: Account }>('/api/onedrive/device/poll', { id: device.id })
+        if (r.status === 'connected') {
+          banner.value = `✓ Connected as ${r.account?.email || 'Microsoft account'}`
+          bannerClass.value = 'border-[var(--color-success)] text-[var(--color-success)]'
+          cancelDevice()
+          await refresh()
+          return
+        }
+        devicePoller = setTimeout(tick, res.interval * 1000)
+      } catch (err) {
+        cancelDevice()
+        showError(err)
+      }
+    }
+    devicePoller = setTimeout(tick, res.interval * 1000)
+  } catch (err) {
+    showError(err)
+  } finally {
+    busy.value = false
+  }
+}
+
+onBeforeUnmount(() => cancelDevice())
 
 const manual = reactive({ label: '', tenant: '', clientId: '', clientSecret: '', refreshToken: '' })
 

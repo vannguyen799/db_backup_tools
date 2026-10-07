@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import { Readable } from 'node:stream'
 import type { ReadableStream as WebReadableStream } from 'node:stream/web'
@@ -64,6 +65,21 @@ interface GraphUser {
   displayName?: string
   mail?: string | null
   userPrincipalName?: string
+}
+
+interface DeviceFlow {
+  deviceCode: string
+  clientId: string
+  tenant: string
+  label?: string
+  expiresAt: number
+}
+
+const DEVICE_FLOWS = new Map<string, DeviceFlow>()
+
+function pruneDeviceFlows() {
+  const now = Date.now()
+  for (const [k, v] of DEVICE_FLOWS) if (v.expiresAt < now) DEVICE_FLOWS.delete(k)
 }
 
 function sleep(ms: number) {
@@ -248,6 +264,82 @@ export class OneDriveService {
       clientSecretEncrypted: clientSecret ? encryptString(clientSecret) : '',
       source: 'manual',
     })
+  }
+
+  /**
+   * Device code flow: no redirect URI or client secret. The user enters a short code at
+   * microsoft.com/link while we poll the token endpoint. Needs a client id with
+   * "Allow public client flows" enabled (own app registration or env MICROSOFT_CLIENT_ID).
+   */
+  async startDeviceCode(input: { clientId?: string; tenant?: string; label?: string }) {
+    const clientId = (input.clientId || this.config.clientId || '').trim()
+    if (!clientId) throw new AppError('clientId is required (or set MICROSOFT_CLIENT_ID)', 400)
+    const tenant = (input.tenant || '').trim() || 'consumers'
+    const res = await fetch(`${LOGIN}/${encodeURIComponent(tenant)}/oauth2/v2.0/devicecode`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: clientId, scope: SCOPES.join(' ') }),
+    })
+    if (!res.ok) throw await graphError(res, 'Microsoft device code request')
+    const body = (await res.json()) as {
+      device_code: string
+      user_code: string
+      verification_uri: string
+      expires_in: number
+      interval?: number
+    }
+    pruneDeviceFlows()
+    const id = crypto.randomBytes(16).toString('hex')
+    DEVICE_FLOWS.set(id, {
+      deviceCode: body.device_code,
+      clientId,
+      tenant,
+      label: input.label,
+      expiresAt: Date.now() + body.expires_in * 1000,
+    })
+    return {
+      id,
+      userCode: body.user_code,
+      verificationUri: body.verification_uri,
+      expiresIn: body.expires_in,
+      interval: body.interval || 5,
+    }
+  }
+
+  async pollDeviceCode(id: string): Promise<{ status: 'pending' } | { status: 'connected'; account: AccountSummary }> {
+    pruneDeviceFlows()
+    const flow = DEVICE_FLOWS.get(id)
+    if (!flow) throw new AppError('Device code expired or unknown — start again', 400)
+    const res = await fetch(`${LOGIN}/${encodeURIComponent(flow.tenant)}/oauth2/v2.0/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: flow.clientId,
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        device_code: flow.deviceCode,
+      }),
+    })
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { error?: string; error_description?: string }
+      if (err.error === 'authorization_pending' || err.error === 'slow_down') return { status: 'pending' }
+      DEVICE_FLOWS.delete(id)
+      throw new AppError(`Microsoft sign-in failed: ${err.error || res.status} ${err.error_description || ''}`.trim(), 400)
+    }
+    const tokens = (await res.json()) as TokenResponse
+    DEVICE_FLOWS.delete(id)
+    if (!tokens.refresh_token) {
+      throw new AppError('Microsoft did not return a refresh_token — the offline_access scope was not granted.', 400)
+    }
+    const user = await this.fetchUser(tokens.access_token)
+    const account = await this.saveAccount(tokens, user, {
+      label: flow.label,
+      refreshToken: tokens.refresh_token,
+      tenant: flow.tenant,
+      clientIdEncrypted: encryptString(flow.clientId),
+      clientSecretEncrypted: '',
+      source: 'manual',
+    })
+    return { status: 'connected', account }
   }
 
   async updateLabel(id: string, label: string): Promise<AccountSummary> {
