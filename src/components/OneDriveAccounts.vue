@@ -118,7 +118,7 @@
 
       <div v-else-if="mode === 'paste-url'" class="space-y-3">
         <p class="text-sm text-[var(--color-text-muted)]">
-          For a public client (e.g. rclone's) whose redirect is <code class="text-xs">http://localhost:53682/</code>. Sign in, then the browser
+          Uses rclone's public app by default, no Azure registration needed. Its redirect is <code class="text-xs">http://localhost:53682/</code>. Sign in, then the browser
           lands on a page that fails to load — copy that full URL from the address bar and paste it below.
         </p>
         <template v-if="loop.url">
@@ -149,12 +149,12 @@
             </div>
           </div>
           <div>
-            <label class="label">Client ID</label>
-            <input v-model="loop.clientId" class="input font-mono text-xs" placeholder="00000000-0000-0000-0000-000000000000" />
+            <label class="label">Client ID (optional)</label>
+            <input v-model="loop.clientId" class="input font-mono text-xs" placeholder="empty = rclone's public app (works for personal accounts)" />
           </div>
           <div>
             <label class="label">Client Secret (optional)</label>
-            <input v-model="loop.clientSecret" type="password" class="input font-mono text-xs" />
+            <input v-model="loop.clientSecret" type="password" class="input font-mono text-xs" placeholder="empty = rclone's default secret" />
           </div>
           <button class="btn btn-primary" :disabled="busy" @click="startLoop">Get sign-in link</button>
         </template>

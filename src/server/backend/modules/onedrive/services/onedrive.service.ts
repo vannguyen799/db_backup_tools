@@ -90,6 +90,10 @@ interface LoopbackFlow {
 const LOOPBACK_FLOWS = new Map<string, LoopbackFlow>()
 // A public client's registered redirect; nothing listens here — the user copies the URL their browser lands on.
 const LOOPBACK_REDIRECT = 'http://localhost:53682/'
+// rclone's public OneDrive app (both values are published in rclone's source, backend/onedrive/onedrive.go).
+// Used when no client id is given, so a personal account can connect without registering an Azure app.
+const RCLONE_CLIENT_ID = 'b15665d9-eda6-4092-8539-0eec376afd59'
+const RCLONE_CLIENT_SECRET = 'qtyfaBBYA403=unZUP40~_#'
 
 function pruneLoopbackFlows() {
   const now = Date.now()
@@ -367,8 +371,9 @@ export class OneDriveService {
    * that URL back and we redeem the code here.
    */
   startLoopback(input: { clientId?: string; clientSecret?: string; tenant?: string; label?: string }) {
-    const clientId = (input.clientId || this.config.clientId || '').trim()
-    if (!clientId) throw new AppError('clientId is required (or set MICROSOFT_CLIENT_ID)', 400)
+    // Deliberately not the env app: its registered redirect is the web callback, not localhost:53682.
+    const clientId = (input.clientId || '').trim() || RCLONE_CLIENT_ID
+    const clientSecret = (input.clientSecret || '').trim() || (clientId === RCLONE_CLIENT_ID ? RCLONE_CLIENT_SECRET : '')
     const tenant = (input.tenant || '').trim() || 'consumers'
     pruneLoopbackFlows()
     const id = crypto.randomBytes(16).toString('hex')
@@ -376,7 +381,7 @@ export class OneDriveService {
     const verifier = crypto.randomBytes(48).toString('base64url')
     LOOPBACK_FLOWS.set(id, {
       clientId,
-      clientSecret: (input.clientSecret || '').trim(),
+      clientSecret,
       tenant,
       label: input.label,
       verifier,
