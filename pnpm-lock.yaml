@@ -18,8 +18,8 @@ importers:
         specifier: 0.1.1
         version: 0.1.1(truxie@0.1.2)
       '@truxie/mcp':
-        specifier: 0.3.0
-        version: 0.3.0(@truxie/jwt@0.1.1(truxie@0.1.2))(@truxie/rbac@0.1.1(truxie@0.1.2))(truxie@0.1.2)
+        specifier: 0.3.1
+        version: 0.3.1(@truxie/jwt@0.1.1(truxie@0.1.2))(@truxie/rbac@0.1.1(truxie@0.1.2))(truxie@0.1.2)
       '@truxie/nitro':
         specifier: 0.1.2
         version: 0.1.2(h3@1.15.11)(truxie@0.1.2)
@@ -27,8 +27,8 @@ importers:
         specifier: 0.1.1
         version: 0.1.1(truxie@0.1.2)
       '@truxie/schedule':
-        specifier: 0.1.1
-        version: 0.1.1(croner@10.0.1)(truxie@0.1.2)
+        specifier: 0.1.2
+        version: 0.1.2(croner@10.0.1)(truxie@0.1.2)
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -1537,8 +1537,8 @@ packages:
     peerDependencies:
       truxie: ^0.1.1
 
-  '@truxie/mcp@0.3.0':
-    resolution: {integrity: sha512-3ho0FpiEjpXNximJuvde+33S1d+8apIoayOIMv8qhkRo839WQjlTNJ16QO9S3t7X4O5mEmBcHxgPLlma7ydTdA==}
+  '@truxie/mcp@0.3.1':
+    resolution: {integrity: sha512-3lPzz8WYCC7pNtmJscXqoseWxy88RsfCAjDJezW1yJ9KOQrmltHULH4Bp47TM1TaWVnFA4Dvt4GV+U2YWLHajQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@truxie/jwt': ^0.1.1
@@ -1558,8 +1558,8 @@ packages:
     peerDependencies:
       truxie: ^0.1.1
 
-  '@truxie/schedule@0.1.1':
-    resolution: {integrity: sha512-xc4B8SvkQE4PhRvSWJhtIOhPUIbfijhYa0Ra0CaGf0cgWHajSOND8i0+bA9/hIZ5AlXsyPHF76xH91AyXwwkLA==}
+  '@truxie/schedule@0.1.2':
+    resolution: {integrity: sha512-X8IRX87hfXKrdERjubhpd9YF/5R9WpWSpP0pQwP2idqpM6kfUGB/bD+YSLcPAxgHJENRBQhkbFzNx/pxYknU5w==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       croner: ^9.0.0 || ^10.0.0
@@ -5452,7 +5452,7 @@ snapshots:
     dependencies:
       truxie: 0.1.2
 
-  '@truxie/mcp@0.3.0(@truxie/jwt@0.1.1(truxie@0.1.2))(@truxie/rbac@0.1.1(truxie@0.1.2))(truxie@0.1.2)':
+  '@truxie/mcp@0.3.1(@truxie/jwt@0.1.1(truxie@0.1.2))(@truxie/rbac@0.1.1(truxie@0.1.2))(truxie@0.1.2)':
     dependencies:
       '@truxie/jwt': 0.1.1(truxie@0.1.2)
       '@truxie/rbac': 0.1.1(truxie@0.1.2)
@@ -5467,9 +5467,10 @@ snapshots:
     dependencies:
       truxie: 0.1.2
 
-  '@truxie/schedule@0.1.1(croner@10.0.1)(truxie@0.1.2)':
+  '@truxie/schedule@0.1.2(croner@10.0.1)(truxie@0.1.2)':
     dependencies:
       croner: 10.0.1
+      reflect-metadata: 0.2.2
       truxie: 0.1.2
 
   '@tybys/wasm-util@0.10.2':
