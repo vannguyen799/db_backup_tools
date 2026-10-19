@@ -15,20 +15,20 @@ importers:
         specifier: ^4.2.0
         version: 4.3.0
       '@truxie/jwt':
-        specifier: 0.1.1
-        version: 0.1.1(truxie@0.1.2)
-      '@truxie/mcp':
-        specifier: 0.3.0
-        version: 0.3.0(@truxie/jwt@0.1.1(truxie@0.1.2))(@truxie/rbac@0.1.1(truxie@0.1.2))(truxie@0.1.2)
-      '@truxie/nitro':
         specifier: 0.1.2
-        version: 0.1.2(h3@1.15.11)(truxie@0.1.2)
+        version: 0.1.2(truxie@0.2.0)
+      '@truxie/mcp':
+        specifier: 0.3.2
+        version: 0.3.2(@truxie/jwt@0.1.2(truxie@0.2.0))(@truxie/rbac@0.1.2(truxie@0.2.0))(truxie@0.2.0)
+      '@truxie/nitro':
+        specifier: 0.1.3
+        version: 0.1.3(h3@1.15.11)(truxie@0.2.0)
       '@truxie/rbac':
-        specifier: 0.1.1
-        version: 0.1.1(truxie@0.1.2)
+        specifier: 0.1.2
+        version: 0.1.2(truxie@0.2.0)
       '@truxie/schedule':
-        specifier: 0.1.1
-        version: 0.1.1(croner@10.0.1)(truxie@0.1.2)
+        specifier: 0.1.3
+        version: 0.1.3(croner@10.0.1)(truxie@0.2.0)
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -66,8 +66,8 @@ importers:
         specifier: ^4.2.0
         version: 4.3.0
       truxie:
-        specifier: 0.1.2
-        version: 0.1.2
+        specifier: 0.2.0
+        version: 0.2.0
       vue:
         specifier: ^3.5.0
         version: 3.5.34(typescript@5.9.3)
@@ -1531,39 +1531,39 @@ packages:
   '@tailwindcss/postcss@4.3.0':
     resolution: {integrity: sha512-Jm05Tjx+9yCLGv5qw1c+84Psds8MnyrEQYCB+FFk2lgGiUjlRqdxke4mVTuYrj2xnVZqKim2Apr5ySuQRYAw/w==}
 
-  '@truxie/jwt@0.1.1':
-    resolution: {integrity: sha512-Zfe8DnyXG1O3tpRAVmfk5p1lkZebLKc2t3YvI4BWkqEwq8wn0cNvaRh6F/xKmhzyigDIJMWK1SnDXB7mmuAbVw==}
+  '@truxie/jwt@0.1.2':
+    resolution: {integrity: sha512-fvocsIiLBJMkPBy8xOnubQGN0ywa8pwz+aVOUTNGE52+1OU5lDeqg5wEegVGm90JAb6pJpDaMiCWsl+uRVq0jA==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
-      truxie: ^0.1.1
+      truxie: ^0.1.1 || ^0.2.0
 
-  '@truxie/mcp@0.3.0':
-    resolution: {integrity: sha512-3ho0FpiEjpXNximJuvde+33S1d+8apIoayOIMv8qhkRo839WQjlTNJ16QO9S3t7X4O5mEmBcHxgPLlma7ydTdA==}
+  '@truxie/mcp@0.3.2':
+    resolution: {integrity: sha512-lApxKT/0vRWki7dHfPAM5ALp/YfJR9SJhuWcWNqXFRdbN0xmcoGV0AtP5B4Nl93d5QtDbMRUnDUFvzFtLIF2ig==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@truxie/jwt': ^0.1.1
       '@truxie/rbac': ^0.1.1
-      truxie: ^0.1.2
+      truxie: ^0.1.2 || ^0.2.0
 
-  '@truxie/nitro@0.1.2':
-    resolution: {integrity: sha512-8+AmsuQlCK+ABM3YKeh2zAZ8Skn0VuNLEUEU9/BPBc1oF0oxmEjKo9b5uTk10FBIWlSC44eotrimg+Un/joubA==}
+  '@truxie/nitro@0.1.3':
+    resolution: {integrity: sha512-r0m+ZAnfFCn68cXa7xx4mwsbPwSJTCRFQcixqw37va1QfwIpEGAmFFUKr+8VsJ4SuvSVweK0+5hq6ZMbdPdZGQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       h3: '>=1.0.0'
-      truxie: ^0.1.1
+      truxie: ^0.1.1 || ^0.2.0
 
-  '@truxie/rbac@0.1.1':
-    resolution: {integrity: sha512-HM26psX2qGvW44SFZv0lWutLu5I44le7x91Gr71e7cmvTvTg+L7QXxK2kbvTlWCrT/DJQTeh68if18Lq4Q/DQA==}
+  '@truxie/rbac@0.1.2':
+    resolution: {integrity: sha512-KZo4BhJ/PO6dGcU1zxsKTT9tMN7epAtmD6klPziy5D30nkEbuciFFlKD4kp71/NtJ37YWT+ffXB6q1AhEexbKA==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
-      truxie: ^0.1.1
+      truxie: ^0.1.1 || ^0.2.0
 
-  '@truxie/schedule@0.1.1':
-    resolution: {integrity: sha512-xc4B8SvkQE4PhRvSWJhtIOhPUIbfijhYa0Ra0CaGf0cgWHajSOND8i0+bA9/hIZ5AlXsyPHF76xH91AyXwwkLA==}
+  '@truxie/schedule@0.1.3':
+    resolution: {integrity: sha512-cKUNKvHIZM9XOYs8Hr0OOWOTcfaqKRpOja4p0s6HZ+MMU+6QT/ztfeH4TDgqCRr7a2LcuKCxgk7/+CVOaPcnUw==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       croner: ^9.0.0 || ^10.0.0
-      truxie: ^0.1.1
+      truxie: ^0.1.1 || ^0.2.0
 
   '@tybys/wasm-util@0.10.2':
     resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
@@ -3750,8 +3750,8 @@ packages:
     resolution: {integrity: sha512-hdF5ZgjTqgAntKkklYw0R03MG2x/bSzTtkxmIRw/sTNV8YXsCJ1tfLAX23lhxhHJlEf3CRCOCGGWw3vI3GaSPw==}
     engines: {node: '>=18'}
 
-  truxie@0.1.2:
-    resolution: {integrity: sha512-kbTf016cOR2ijRMF8WRoy/PSFQ6PjJuNhAL/M1+hufmpOpRgMHdyM68a8Cn7Qzkp33LdaukpYVxEGlfMbVVl1w==}
+  truxie@0.2.0:
+    resolution: {integrity: sha512-Qh1zzxvxpthPUjT3ehIGEVKi+goHZ8mXcOfSpkC2iXcmfP7k43FpGF23HE/xVgRQDD7ErXeMDMOa8Teks+8/Ng==}
     engines: {node: '>=20.0.0'}
 
   tslib@2.8.1:
@@ -5448,29 +5448,30 @@ snapshots:
       postcss: 8.5.14
       tailwindcss: 4.3.0
 
-  '@truxie/jwt@0.1.1(truxie@0.1.2)':
+  '@truxie/jwt@0.1.2(truxie@0.2.0)':
     dependencies:
-      truxie: 0.1.2
+      truxie: 0.2.0
 
-  '@truxie/mcp@0.3.0(@truxie/jwt@0.1.1(truxie@0.1.2))(@truxie/rbac@0.1.1(truxie@0.1.2))(truxie@0.1.2)':
+  '@truxie/mcp@0.3.2(@truxie/jwt@0.1.2(truxie@0.2.0))(@truxie/rbac@0.1.2(truxie@0.2.0))(truxie@0.2.0)':
     dependencies:
-      '@truxie/jwt': 0.1.1(truxie@0.1.2)
-      '@truxie/rbac': 0.1.1(truxie@0.1.2)
-      truxie: 0.1.2
+      '@truxie/jwt': 0.1.2(truxie@0.2.0)
+      '@truxie/rbac': 0.1.2(truxie@0.2.0)
+      truxie: 0.2.0
 
-  '@truxie/nitro@0.1.2(h3@1.15.11)(truxie@0.1.2)':
+  '@truxie/nitro@0.1.3(h3@1.15.11)(truxie@0.2.0)':
     dependencies:
       h3: 1.15.11
-      truxie: 0.1.2
+      truxie: 0.2.0
 
-  '@truxie/rbac@0.1.1(truxie@0.1.2)':
+  '@truxie/rbac@0.1.2(truxie@0.2.0)':
     dependencies:
-      truxie: 0.1.2
+      truxie: 0.2.0
 
-  '@truxie/schedule@0.1.1(croner@10.0.1)(truxie@0.1.2)':
+  '@truxie/schedule@0.1.3(croner@10.0.1)(truxie@0.2.0)':
     dependencies:
       croner: 10.0.1
-      truxie: 0.1.2
+      reflect-metadata: 0.2.2
+      truxie: 0.2.0
 
   '@tybys/wasm-util@0.10.2':
     dependencies:
@@ -7975,7 +7976,7 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  truxie@0.1.2:
+  truxie@0.2.0:
     dependencies:
       reflect-metadata: 0.2.2
 
